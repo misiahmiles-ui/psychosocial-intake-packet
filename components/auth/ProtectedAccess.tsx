@@ -62,10 +62,14 @@ export function ProtectedAccess({ children }: ProtectedAccessProps) {
     });
 
     if (!response.ok) {
+      const data = (await response.json().catch(() => null)) as {
+        error?: string;
+      } | null;
       setStatus({
         state: "error",
         message:
-          "Access status could not be checked. Confirm Supabase server settings are configured."
+          data?.error ??
+          "Access status could not be checked. Please sign out and sign back in, then try again."
       });
       return;
     }
