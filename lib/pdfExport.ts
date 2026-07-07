@@ -203,7 +203,7 @@ function drawField(
   }
 
   const value = formatFieldValue(field, rawValue);
-  drawFieldLine(context, field.label, value, field.path, field.kind);
+  drawFieldLine(context, field, value);
 }
 
 function drawLogoUploadField(context: PdfContext, rawValue: unknown) {
@@ -449,34 +449,55 @@ function scoringInterpretation(level: string) {
 
 function drawFieldLine(
   context: PdfContext,
-  label: string,
-  value: string,
-  fieldPath: string,
-  kind?: FieldDefinition["kind"]
+  field: FieldDefinition,
+  value: string
 ) {
-  const labelText = `${label}:`;
-  const labelWidth = Math.min(context.bold.widthOfTextAtSize(labelText, 9) + 8, 190);
-  const fieldWidth = contentWidth - labelWidth;
-  const wrapped = wrapText(value || "____________________________", context.font, 9, fieldWidth);
-  const isLongField = kind === "textarea" || value.length > 90 || wrapped.length > 1;
+  const labelText = `${field.label}:`;
+  const naturalLabelWidth = context.bold.widthOfTextAtSize(labelText, 9) + 8;
+  const shouldStack = Boolean(field.full) || naturalLabelWidth > 185;
+  const labelWidth = Math.min(naturalLabelWidth, 190);
+  const fieldX = shouldStack ? margin : margin + labelWidth;
+  const fieldWidth = shouldStack ? contentWidth : contentWidth - labelWidth;
+  const wrapped = wrapText(
+    value || "____________________________",
+    context.font,
+    9,
+    fieldWidth
+  );
+  const isLongField =
+    field.kind === "textarea" || value.length > 90 || wrapped.length > 1;
   const draftHeight = isLongField ? 64 : 24;
   const draftFontSize = isLongField ? 10 : 12;
   const staticHeight = Math.max(18, wrapped.length * 12 + 4);
-  const rowHeight = context.mode === "draft" ? draftHeight + 8 : staticHeight;
+  const labelLines = shouldStack
+    ? wrapText(labelText, context.bold, 9, contentWidth)
+    : [labelText];
+  const labelBlockHeight = shouldStack ? labelLines.length * 12 + 4 : 0;
+  const rowHeight = shouldStack
+    ? labelBlockHeight +
+      (context.mode === "draft" ? draftHeight + 8 : staticHeight + 4)
+    : context.mode === "draft" ? draftHeight + 8 : staticHeight;
 
   ensureRoom(context, rowHeight + 12);
-  const x = margin;
   const y = context.y;
 
-  drawFieldLabel(context, labelText, y);
+  if (shouldStack) {
+    labelLines.forEach((line, index) => {
+      drawFieldLabel(context, line, y - index * 12);
+    });
+  } else {
+    drawFieldLabel(context, labelText, y);
+  }
+
+  const fieldTopY = shouldStack ? y - labelBlockHeight : y;
 
   if (context.mode === "draft" && context.form) {
-    const textField = context.form.createTextField(toPdfFieldName(fieldPath, context));
+    const textField = context.form.createTextField(toPdfFieldName(field.path, context));
     textField.enableMultiline();
     textField.setText(value);
     textField.addToPage(context.page, {
-      x: x + labelWidth,
-      y: y - draftHeight + 7,
+      x: fieldX,
+      y: fieldTopY - draftHeight + 7,
       width: fieldWidth,
       height: draftHeight,
       borderColor: rgb(0.66, 0.74, 0.71),
@@ -492,8 +513,8 @@ function drawFieldLine(
 
   wrapped.forEach((line, index) => {
     context.page.drawText(line, {
-      x: x + labelWidth,
-      y: y - index * 12,
+      x: fieldX,
+      y: fieldTopY - index * 12,
       size: 9,
       font: context.font,
       color: rgb(0.18, 0.25, 0.23)
