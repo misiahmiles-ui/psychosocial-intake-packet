@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 import {
   createSupabaseAdminClient,
-  createSupabaseServerClient,
   getBearerToken,
-  hasSupabaseAdminConfig,
-  hasSupabasePublicServerConfig
+  hasSupabaseAdminConfig
 } from "@/lib/supabase/server";
 
 type ProfileRow = {
@@ -17,7 +15,7 @@ type ProfileRow = {
 };
 
 export async function GET(request: Request) {
-  if (!hasSupabasePublicServerConfig() || !hasSupabaseAdminConfig()) {
+  if (!hasSupabaseAdminConfig()) {
     return NextResponse.json(
       { error: "Supabase account access is not configured." },
       { status: 503 }
@@ -30,17 +28,16 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 
-  const authClient = createSupabaseServerClient(token);
+  const admin = createSupabaseAdminClient();
   const {
     data: { user },
     error: userError
-  } = await authClient.auth.getUser();
+  } = await admin.auth.getUser(token);
 
   if (userError || !user) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 
-  const admin = createSupabaseAdminClient();
   const { data, error } = await admin
     .from("profiles")
     .select("id,email,full_name,username,agency_name,has_access")
@@ -65,7 +62,7 @@ export async function GET(request: Request) {
     (
       await admin
         .from("profiles")
-        .insert({
+        .upsert({
           agency_name: metadata.agency_name ?? null,
           email: user.email ?? null,
           full_name: metadata.full_name ?? null,

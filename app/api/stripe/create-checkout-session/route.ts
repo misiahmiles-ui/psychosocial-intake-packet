@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 import {
   createSupabaseAdminClient,
-  createSupabaseServerClient,
   getBearerToken,
-  hasSupabaseAdminConfig,
-  hasSupabasePublicServerConfig
+  hasSupabaseAdminConfig
 } from "@/lib/supabase/server";
 import {
   createStripeClient,
@@ -15,7 +13,6 @@ import {
 
 export async function POST(request: Request) {
   if (
-    !hasSupabasePublicServerConfig() ||
     !hasSupabaseAdminConfig() ||
     !hasStripeCheckoutConfig()
   ) {
@@ -31,17 +28,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 
-  const authClient = createSupabaseServerClient(token);
+  const admin = createSupabaseAdminClient();
   const {
     data: { user },
     error: userError
-  } = await authClient.auth.getUser();
+  } = await admin.auth.getUser(token);
 
   if (userError || !user?.email) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 
-  const admin = createSupabaseAdminClient();
   const { data: profile } = await admin
     .from("profiles")
     .select("has_access,stripe_customer_id")
