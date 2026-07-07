@@ -9,3 +9,6 @@ dist
 .vercel
 tmp
 *.tsbuildinfo
+
+# Local Netlify folder
+.netlify

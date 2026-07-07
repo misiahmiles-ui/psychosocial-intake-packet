@@ -89,16 +89,21 @@ export default function PsychosocialIntakePacketPage() {
 
       <section className="border-b border-[#eadad2] bg-[#fff8f2]">
         <div className="mx-auto max-w-7xl px-5 py-8 sm:px-8 lg:px-10">
-          <div className="overflow-hidden rounded-lg border border-[#eadad2] bg-white shadow-soft">
+          <Link
+            href="/signup"
+            aria-label="View the packet and create an access account"
+            className="group relative block overflow-hidden rounded-lg border border-[#eadad2] bg-white shadow-soft focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-[#2f6798]/35"
+          >
             <Image
               src="/assets/professional_springtime_intake_packet_promotion.png"
               alt="Spring wellness promotional banner for The Psychosocial Intake Packet by Marvin Miles, LSW"
               width={1600}
               height={900}
               priority
-              className="h-auto w-full"
+              className="h-auto w-full transition duration-200 group-hover:brightness-[0.98]"
             />
-          </div>
+            <span className="pointer-events-none absolute bottom-[4.8%] right-[9%] h-[8.3%] w-[24%] rounded-lg ring-0 transition group-hover:ring-4 group-hover:ring-white/70 group-focus-visible:ring-4 group-focus-visible:ring-[#2f6798]/60" />
+          </Link>
 
           <div className="mx-auto mt-8 max-w-4xl text-center">
             <p className="inline-flex items-center gap-2 rounded-full border border-[#d8c08d] bg-white px-4 py-2 text-sm font-bold text-[#45613a]">
