@@ -169,8 +169,8 @@ export function ProtectedAccess({ children }: ProtectedAccessProps) {
                 Protected packet access
               </h1>
               <p className="mt-2 leading-7 text-[#52645f]">
-                Sign in and complete the one-time Standard Agency Access
-                purchase to use the hosted packet workflow.
+                Sign in and complete Standard Agency Access to use the hosted
+                packet workflow.
               </p>
             </div>
           </div>
@@ -216,11 +216,12 @@ export function ProtectedAccess({ children }: ProtectedAccessProps) {
             <div className="mt-5">
               <div className="rounded-lg border border-[#f0d3c8] bg-[#fff8f5] p-4">
                 <h2 className="font-bold text-clay">
-                  Standard Agency Access - $497
+                  Standard Agency Access - $487 + $19/month
                 </h2>
                 <p className="mt-2 text-sm font-semibold leading-6 text-[#643524]">
                   This account is created, but payment has not been confirmed.
-                  Complete checkout to unlock the packet dashboard.
+                  Complete the upfront access payment and monthly hosted access
+                  subscription to unlock the packet dashboard.
                 </p>
               </div>
               <button

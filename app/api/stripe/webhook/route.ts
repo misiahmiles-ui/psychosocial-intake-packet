@@ -62,5 +62,37 @@ export async function POST(request: Request) {
     }
   }
 
+  if (
+    event.type === "customer.subscription.updated" ||
+    event.type === "customer.subscription.deleted"
+  ) {
+    const subscription = event.data.object as Stripe.Subscription;
+    const userId = subscription.metadata?.supabase_user_id;
+    const customerId =
+      typeof subscription.customer === "string" ? subscription.customer : null;
+    const hasAccess = isSubscriptionAccessActive(subscription.status);
+
+    if (userId || customerId) {
+      const admin = createSupabaseAdminClient();
+      const update = {
+        has_access: hasAccess,
+        updated_at: new Date().toISOString()
+      };
+
+      if (userId) {
+        await admin.from("profiles").update(update).eq("id", userId);
+      } else if (customerId) {
+        await admin
+          .from("profiles")
+          .update(update)
+          .eq("stripe_customer_id", customerId);
+      }
+    }
+  }
+
   return NextResponse.json({ received: true });
+}
+
+function isSubscriptionAccessActive(status: Stripe.Subscription.Status) {
+  return status === "active" || status === "trialing";
 }

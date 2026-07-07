@@ -33,15 +33,16 @@ This is a privacy-conscious/no-retention workflow design, not a HIPAA compliance
 
 The app uses local PDF export only and does not save drafts internally. Editable Draft PDF behavior may vary by PDF viewer. Adobe Acrobat Reader is recommended for completing or revising downloaded editable draft PDFs. Checkbox, multiple-choice, and scoring responses include readable selected-answer summaries to preserve clarity across PDF viewers.
 
-## Standard Agency Access - $497 One-Time
+## Standard Agency Access - $487 Up Front + $19/Month
 
 Standard Agency Access provides one agency/location with access to the standard hosted version of the digital psychosocial intake workflow. The tool is designed for Adult Medical Day Care, Adult Day Health, social workers, interdisciplinary team members, intake coordinators, and behavioral health documentation teams.
 
-This one-time package gives an agency access to the standard hosted version of the intake tool. The tool remains available while the hosted version is active. Agencies that want their own dedicated deployment, custom form language, permanent branding, staff logins, or long-term independent control may request a separate Agency-Owned Setup package.
+This package includes a $487 upfront access charge plus a $19/month hosted access and maintenance subscription. The tool remains available while the buyer subscription is active and the hosted version is active. Agencies that want their own dedicated deployment, custom form language, permanent branding, staff logins, or long-term independent control may request a separate Agency-Owned Setup package.
 
 ### Package includes
 
 - Buyer account login for protected hosted access.
+- Monthly hosted access and standard maintenance for the hosted version.
 - Access to the standard digital psychosocial intake workflow.
 - Facility/company information entry.
 - Session-based company logo upload.
@@ -61,9 +62,9 @@ This one-time package gives an agency access to the standard hosted version of t
 
 ### Hosted access limitation
 
-Standard Agency Access is provided as access to the hosted standard version of the digital intake workflow. Continued access depends on the active availability of the hosted site. Hosting, updates, technical support, customization, and long-term maintenance are not included unless provided under a separate written agreement.
+Standard Agency Access is provided as access to the hosted standard version of the digital intake workflow. Continued access depends on an active monthly subscription and the active availability of the hosted site. The $19/month fee covers hosted access and standard maintenance for this hosted version. Customization, dedicated support, compliance review, and agency-owned deployment are not included unless provided under a separate written agreement.
 
-The $497 Standard Agency Access package does not include custom agency deployment, permanent built-in agency logo or branding, custom consent rewriting, custom intake sections, multiple staff seats unless separately configured, custom user roles, database storage of client/member assessment data, saved internal drafts, ongoing technical support, HIPAA compliance certification, Business Associate Agreement review, hosting guarantee beyond the active hosted version, or long-term maintenance unless separately purchased.
+The Standard Agency Access package does not include custom agency deployment, permanent built-in agency logo or branding, custom consent rewriting, custom intake sections, multiple staff seats unless separately configured, custom user roles, database storage of client/member assessment data, saved internal drafts, custom technical support beyond included hosted maintenance, HIPAA compliance certification, Business Associate Agreement review, dedicated agency-owned hosting, or custom long-term maintenance unless separately purchased.
 
 ### No-retention/local export explanation
 
@@ -83,11 +84,12 @@ This project is set up for the simple paid-access model:
 
 1. Netlify hosts the web app.
 2. Supabase stores buyer accounts and access status only.
-3. Stripe collects the $497 payment.
-4. Stripe sends a webhook back to the app.
-5. The webhook marks the buyer profile as `has_access = true`.
-6. The buyer signs in and opens the protected packet dashboard.
-7. Packet/client/member information remains local-only and is saved only by PDF download/export/print.
+3. Stripe collects the $487 upfront payment and starts the $19/month hosted access and maintenance subscription.
+4. Stripe sends webhooks back to the app.
+5. The webhook marks the buyer profile as `has_access = true` while the subscription is active.
+6. Subscription update/cancellation webhooks update access when Stripe reports the subscription is no longer active.
+7. The buyer signs in and opens the protected packet dashboard.
+8. Packet/client/member information remains local-only and is saved only by PDF download/export/print.
 
 Run `supabase/schema.sql` in the Supabase SQL editor before launch. This creates the `profiles` table and signup trigger for buyer profiles only.
 
@@ -100,11 +102,13 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
-STRIPE_STANDARD_ACCESS_PRICE_ID=
-STANDARD_ACCESS_PRICE_CENTS=49700
+STRIPE_STANDARD_ACCESS_UPFRONT_PRICE_ID=
+STRIPE_STANDARD_ACCESS_MONTHLY_PRICE_ID=
+STANDARD_ACCESS_UPFRONT_PRICE_CENTS=48700
+STANDARD_ACCESS_MONTHLY_PRICE_CENTS=1900
 ```
 
-`STRIPE_STANDARD_ACCESS_PRICE_ID` is optional. If it is left blank, checkout creates a one-time $497 payment line item from `STANDARD_ACCESS_PRICE_CENTS`.
+The Stripe price IDs are optional for local testing. If they are left blank, checkout creates inline Stripe prices for `$487` up front plus `$19/month`. For the live product, create one one-time Stripe Price for `$487` and one recurring monthly Stripe Price for `$19/month`, then add their IDs as `STRIPE_STANDARD_ACCESS_UPFRONT_PRICE_ID` and `STRIPE_STANDARD_ACCESS_MONTHLY_PRICE_ID` in Netlify.
 
 In Stripe, create a webhook endpoint pointing to:
 
@@ -112,7 +116,7 @@ In Stripe, create a webhook endpoint pointing to:
 https://your-netlify-site.netlify.app/api/stripe/webhook
 ```
 
-Send the `checkout.session.completed` event to that endpoint. Copy the webhook signing secret into `STRIPE_WEBHOOK_SECRET`.
+Send the `checkout.session.completed`, `customer.subscription.updated`, and `customer.subscription.deleted` events to that endpoint. Copy the webhook signing secret into `STRIPE_WEBHOOK_SECRET`.
 
 Do not hard-code secret keys, Stripe secret keys, Supabase service role keys, backend payment logic, or payment credentials in browser code. Use Netlify environment variables.
 

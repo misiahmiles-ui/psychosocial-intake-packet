@@ -29,6 +29,7 @@ const nextSteps = [
 
 const standardAgencyIncludes = [
   "Buyer account login for protected hosted access",
+  "$19/month hosted access and maintenance plan",
   "Access to the standard digital psychosocial intake workflow",
   "Facility/company information entry",
   "Session-based company logo upload",
@@ -47,9 +48,9 @@ const standardAgencyNotIncluded = [
   "Custom consent rewriting or custom intake sections",
   "Multiple staff seats unless separately configured",
   "Client/member database storage or saved internal drafts",
-  "Ongoing technical support",
+  "Custom technical support beyond included hosted maintenance",
   "HIPAA compliance certification or BAA review",
-  "Hosting guarantee or long-term maintenance unless separately purchased"
+  "Dedicated agency-owned hosting or custom long-term maintenance unless separately purchased"
 ];
 
 export default function GuidePage() {
@@ -117,14 +118,16 @@ export default function GuidePage() {
               Sales package
             </p>
             <h2 className="mt-3 text-xl font-bold">
-              Standard Agency Access - $497 One-Time
+              Standard Agency Access - $487 up front + $19/month
             </h2>
             <p className="mt-3 leading-7 text-[#52645f]">
               Standard Agency Access provides one agency/location with access to
               the standard hosted version of the digital psychosocial intake
-              workflow. Continued access depends on the active availability of
-              the hosted site. Hosting, updates, technical support,
-              customization, and long-term maintenance are not included unless
+              workflow. Continued access depends on an active monthly
+              subscription and the active availability of the hosted site. The
+              monthly fee covers hosted access and standard maintenance for this
+              hosted version. Customization, dedicated support, compliance
+              review, and agency-owned deployment are not included unless
               provided under a separate written agreement.
             </p>
             <p className="mt-3 leading-7 text-[#52645f]">

@@ -20,9 +20,10 @@ export default function SignupPage() {
             Create Standard Agency Access.
           </h2>
           <p className="mt-4 leading-7 text-[#52645f]">
-            Create the account first, then complete the $497 Stripe checkout.
-            After payment is confirmed, this account can open the packet
-            workflow.
+            Create the account first, then complete the $487 upfront access
+            checkout with the $19/month hosted access and maintenance
+            subscription. After payment is confirmed, this account can open the
+            packet workflow.
           </p>
           <Link
             className="mt-5 inline-flex font-bold text-sea hover:text-[#0b615b]"

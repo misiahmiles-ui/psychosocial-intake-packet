@@ -2,6 +2,8 @@ import "server-only";
 
 import Stripe from "stripe";
 
+type CheckoutLineItem = Stripe.Checkout.SessionCreateParams.LineItem;
+
 export function hasStripeCheckoutConfig() {
   return Boolean(process.env.STRIPE_SECRET_KEY);
 }
@@ -31,8 +33,15 @@ export function getSiteUrl() {
   ).replace(/\/$/, "");
 }
 
-export function getStandardAccessLineItem(): Stripe.Checkout.SessionCreateParams.LineItem {
-  const priceId = process.env.STRIPE_STANDARD_ACCESS_PRICE_ID;
+export function getStandardAccessLineItems(): CheckoutLineItem[] {
+  return [
+    getStandardAccessUpfrontLineItem(),
+    getStandardAccessMonthlyLineItem()
+  ];
+}
+
+function getStandardAccessUpfrontLineItem(): CheckoutLineItem {
+  const priceId = process.env.STRIPE_STANDARD_ACCESS_UPFRONT_PRICE_ID;
 
   if (priceId) {
     return {
@@ -41,18 +50,51 @@ export function getStandardAccessLineItem(): Stripe.Checkout.SessionCreateParams
     };
   }
 
-  const fallbackAmount = Number(process.env.STANDARD_ACCESS_PRICE_CENTS ?? 49700);
+  const fallbackAmount = Number(
+    process.env.STANDARD_ACCESS_UPFRONT_PRICE_CENTS ?? 48700
+  );
 
   return {
     quantity: 1,
     price_data: {
       currency: "usd",
-      unit_amount: Number.isFinite(fallbackAmount) ? fallbackAmount : 49700,
+      unit_amount: Number.isFinite(fallbackAmount) ? fallbackAmount : 48700,
       product_data: {
-        name: "Standard Agency Access",
+        name: "Standard Agency Access - Upfront Access",
         description:
-          "One-time access to the hosted Psychosocial Intake Packet workflow."
+          "One-time upfront access charge for the hosted Psychosocial Intake Packet workflow."
       }
+    }
+  };
+}
+
+function getStandardAccessMonthlyLineItem(): CheckoutLineItem {
+  const priceId = process.env.STRIPE_STANDARD_ACCESS_MONTHLY_PRICE_ID;
+
+  if (priceId) {
+    return {
+      price: priceId,
+      quantity: 1
+    };
+  }
+
+  const fallbackAmount = Number(
+    process.env.STANDARD_ACCESS_MONTHLY_PRICE_CENTS ?? 1900
+  );
+
+  return {
+    quantity: 1,
+    price_data: {
+      currency: "usd",
+      product_data: {
+        name: "Standard Agency Access - Hosted Access and Maintenance",
+        description:
+          "Monthly hosted access and maintenance for the Psychosocial Intake Packet workflow."
+      },
+      recurring: {
+        interval: "month"
+      },
+      unit_amount: Number.isFinite(fallbackAmount) ? fallbackAmount : 1900
     }
   };
 }

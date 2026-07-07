@@ -27,6 +27,7 @@ const features = [
 const packageIncludes = [
   "Standard hosted intake workflow",
   "Buyer account login for protected access",
+  "$19/month hosted access and maintenance plan",
   "Facility setup fields",
   "Session-based logo upload",
   "Psychosocial assessment sections",
@@ -67,11 +68,11 @@ const notIncluded = [
   "Custom user roles or staff permission levels",
   "Database storage of client/member assessment data",
   "Saved internal drafts",
-  "Ongoing technical support",
+  "Custom technical support beyond included hosted maintenance",
   "HIPAA compliance certification",
   "Business Associate Agreement review",
-  "Hosting guarantee beyond the active hosted version",
-  "Long-term maintenance unless separately purchased"
+  "Dedicated agency-owned hosting",
+  "Long-term custom maintenance unless separately purchased"
 ];
 
 const faqs = [
@@ -103,7 +104,7 @@ const faqs = [
   {
     question: "Is this lifetime access?",
     answer:
-      "Standard Agency Access provides access to the hosted standard version while the hosted site remains active. Long-term hosting guarantees, custom deployment, updates, and support require a separate written agreement."
+      "No. Standard Agency Access includes a one-time upfront access charge plus a monthly hosted access and maintenance fee. Continued access depends on an active subscription and the active availability of the hosted site."
   }
 ];
 
@@ -280,7 +281,14 @@ export default function Home() {
                 Standard Agency Access
               </h3>
               <p className="mt-3 text-4xl font-bold text-sea">
-                $497 <span className="text-xl text-[#52645f]">One-Time</span>
+                $487 <span className="text-xl text-[#52645f]">up front</span>
+              </p>
+              <p className="mt-2 text-2xl font-bold text-clay">
+                + $19/month
+                <span className="text-base text-[#52645f]">
+                  {" "}
+                  hosted access and maintenance
+                </span>
               </p>
               <p className="mt-4 leading-7 text-[#52645f]">
                 A digital psychosocial intake workflow for Adult Medical Day
@@ -298,10 +306,11 @@ export default function Home() {
                 <p className="font-bold text-clay">Access Notice</p>
                 <p className="mt-2 text-sm leading-6 text-[#643524]">
                   Standard Agency Access is provided through the hosted standard
-                  version of the tool. Continued access depends on the active
-                  availability of the hosted site. Custom deployment, permanent
-                  branding, user logins, technical support, maintenance, and
-                  compliance review are not included unless purchased separately.
+                  version of the tool. Continued access depends on an active
+                  monthly subscription and the active availability of the hosted
+                  site. Custom deployment, permanent branding, custom user
+                  roles, dedicated support, and compliance review are not
+                  included unless purchased separately.
                 </p>
               </div>
               <div className="mt-4 rounded-lg border border-[#cde7df] bg-mint p-4">
@@ -320,27 +329,28 @@ export default function Home() {
                 <h3 className="text-xl font-bold">Checkout</h3>
                 <p className="mt-3 leading-7 text-[#52645f]">
                   Standard Agency Access - Digital Psychosocial Intake Workflow.
-                  Create an agency access account, complete the $497 Stripe
-                  checkout, and return to the dashboard to open the packet
-                  workflow. Includes session-based facility setup, logo upload,
-                  review page, editable draft PDF download, final PDF/print
-                  workflow, consent and ROI sections, and wet-signature-ready
-                  packet output.
+                  Create an agency access account, complete the $487 upfront
+                  access checkout with the $19/month hosted access and
+                  maintenance subscription, and return to the dashboard to open
+                  the packet workflow. Includes session-based facility setup,
+                  logo upload, review page, editable draft PDF download, final
+                  PDF/print workflow, consent and ROI sections, and
+                  wet-signature-ready packet output.
                 </p>
                 <p className="mt-3 leading-7 text-[#52645f]">
                   This is a no-retention local export workflow. The app does not
                   save client/member information internally. Supabase stores
                   buyer login and access status only. Continued access depends
-                  on active availability of the hosted site. Custom setup,
-                  dedicated deployment, support, and compliance review are not
-                  included.
+                  on an active monthly subscription and active availability of
+                  the hosted site. Custom setup, dedicated deployment, custom
+                  support, and compliance review are not included.
                 </p>
                 <Link
                   href="/signup"
                   className="mt-5 inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-sea px-5 py-3 font-bold text-white transition hover:bg-[#0b615b]"
                 >
                   <CreditCard className="h-4 w-4" aria-hidden="true" />
-                  Create Account and Purchase - $497
+                  Create Account and Purchase - $487 + $19/mo
                 </Link>
               </div>
 
@@ -349,18 +359,21 @@ export default function Home() {
                 <p className="mt-3 leading-7 text-[#52645f]">
                   Standard Agency Access is provided as access to the hosted
                   standard version of the digital intake workflow. Continued
-                  access depends on the active availability of the hosted site.
-                  Hosting, updates, technical support, customization, and
-                  long-term maintenance are not included unless provided under a
-                  separate written agreement.
+                  access depends on an active monthly subscription and the
+                  active availability of the hosted site. The monthly fee covers
+                  hosted access and standard maintenance for this hosted version.
+                  Customization, dedicated support, compliance review, and
+                  agency-owned deployment are not included unless provided under
+                  a separate written agreement.
                 </p>
                 <p className="mt-3 leading-7 text-[#52645f]">
-                  This one-time package gives your agency access to the standard
-                  hosted version of the intake tool. The tool remains available
-                  while the hosted version is active. Agencies that want their
-                  own dedicated deployment, custom form language, permanent
-                  branding, staff logins, or long-term independent control may
-                  request a separate Agency-Owned Setup package.
+                  This package gives your agency access to the standard hosted
+                  version of the intake tool with a one-time upfront charge and
+                  a monthly hosted access and maintenance subscription. Agencies
+                  that want their own dedicated deployment, custom form
+                  language, permanent branding, staff logins, or long-term
+                  independent control may request a separate Agency-Owned Setup
+                  package.
                 </p>
               </div>
             </div>
@@ -395,7 +408,7 @@ export default function Home() {
           <div className="mt-5 grid gap-5 lg:grid-cols-2">
             <section className="rounded-lg border border-[#d7dfdc] bg-white p-6">
               <h3 className="text-xl font-bold">
-                What&apos;s Included - $497 one-time
+                What&apos;s Included - $487 up front + $19/month
               </h3>
               <div className="mt-4 grid gap-2">
                 {detailedIncludes.map((item) => (
@@ -410,7 +423,7 @@ export default function Home() {
             <section className="rounded-lg border border-[#d7dfdc] bg-white p-6">
               <h3 className="text-xl font-bold">What Is Not Included</h3>
               <p className="mt-3 leading-7 text-[#52645f]">
-                The $497 Standard Agency Access package does not include:
+                The Standard Agency Access package does not include:
               </p>
               <div className="mt-4 grid gap-2">
                 {notIncluded.map((item) => (

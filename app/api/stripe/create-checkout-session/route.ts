@@ -9,7 +9,7 @@ import {
 import {
   createStripeClient,
   getSiteUrl,
-  getStandardAccessLineItem,
+  getStandardAccessLineItems,
   hasStripeCheckoutConfig
 } from "@/lib/stripe/server";
 
@@ -62,15 +62,17 @@ export async function POST(request: Request) {
     client_reference_id: user.id,
     customer: profile?.stripe_customer_id ?? undefined,
     customer_email: profile?.stripe_customer_id ? undefined : user.email,
-    line_items: [getStandardAccessLineItem()],
+    line_items: getStandardAccessLineItems(),
     metadata: {
       access_package: "standard_agency_access",
+      billing_model: "upfront_plus_monthly",
       supabase_user_id: user.id
     },
-    mode: "payment",
-    payment_intent_data: {
+    mode: "subscription",
+    subscription_data: {
       metadata: {
         access_package: "standard_agency_access",
+        billing_model: "upfront_plus_monthly",
         supabase_user_id: user.id
       }
     },
