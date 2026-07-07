@@ -102,7 +102,6 @@ export default function PsychosocialIntakePacketPage() {
               priority
               className="h-auto w-full transition duration-200 group-hover:brightness-[0.98]"
             />
-            <span className="pointer-events-none absolute bottom-[4.8%] right-[9%] h-[8.3%] w-[24%] rounded-lg ring-0 transition group-hover:ring-4 group-hover:ring-white/70 group-focus-visible:ring-4 group-focus-visible:ring-[#2f6798]/60" />
           </Link>
 
           <div className="mx-auto mt-8 max-w-4xl text-center">
