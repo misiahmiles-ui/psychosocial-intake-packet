@@ -51,7 +51,8 @@ export function AuthForm({ mode }: AuthFormProps) {
               agency_name: agencyName.trim(),
               full_name: fullName.trim(),
               username: username.trim()
-            }
+            },
+            emailRedirectTo: `${window.location.origin}/dashboard`
           }
         });
 
