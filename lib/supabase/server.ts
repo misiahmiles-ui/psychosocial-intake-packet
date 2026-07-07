@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createClient } from "@supabase/supabase-js";
+import { normalizeSupabaseUrl } from "./url";
 
 export function hasSupabasePublicServerConfig() {
   return Boolean(
@@ -24,7 +25,7 @@ export function createSupabaseServerClient(accessToken?: string) {
     throw new Error("Supabase public environment variables are not configured.");
   }
 
-  return createClient(supabaseUrl, supabaseAnonKey, {
+  return createClient(normalizeSupabaseUrl(supabaseUrl), supabaseAnonKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false
@@ -47,7 +48,7 @@ export function createSupabaseAdminClient() {
     throw new Error("Supabase admin environment variables are not configured.");
   }
 
-  return createClient(supabaseUrl, serviceRoleKey, {
+  return createClient(normalizeSupabaseUrl(supabaseUrl), serviceRoleKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false

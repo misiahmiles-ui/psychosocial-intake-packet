@@ -1,6 +1,7 @@
 "use client";
 
 import { createClient } from "@supabase/supabase-js";
+import { normalizeSupabaseUrl } from "./url";
 
 export function hasSupabaseBrowserConfig() {
   return Boolean(
@@ -17,7 +18,7 @@ export function createSupabaseBrowserClient() {
     throw new Error("Supabase public environment variables are not configured.");
   }
 
-  return createClient(supabaseUrl, supabaseAnonKey, {
+  return createClient(normalizeSupabaseUrl(supabaseUrl), supabaseAnonKey, {
     auth: {
       autoRefreshToken: true,
       detectSessionInUrl: true,
