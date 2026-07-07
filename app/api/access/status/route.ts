@@ -4,6 +4,9 @@ import {
   getBearerToken,
   hasSupabaseAdminConfig
 } from "@/lib/supabase/server";
+import {
+  metadataHasAccess
+} from "@/lib/supabase/accessMetadata";
 
 type ProfileRow = {
   agency_name: string | null;
@@ -44,18 +47,27 @@ export async function GET(request: Request) {
     .eq("id", user.id)
     .maybeSingle<ProfileRow>();
 
-  if (error) {
-    return NextResponse.json(
-      { error: "Access profile could not be loaded." },
-      { status: 500 }
-    );
-  }
-
-  const metadata = user.user_metadata as {
+  const appMetadata = user.app_metadata as Record<string, unknown>;
+  const userMetadata = user.user_metadata as {
     agency_name?: string;
     full_name?: string;
     username?: string;
   };
+
+  if (error) {
+    console.warn("Buyer profile table could not be read.", {
+      code: error.code,
+      message: error.message
+    });
+
+    return NextResponse.json({
+      agencyName: userMetadata.agency_name ?? null,
+      email: user.email ?? null,
+      fullName: userMetadata.full_name ?? null,
+      hasAccess: metadataHasAccess(appMetadata),
+      username: userMetadata.username ?? null
+    });
+  }
 
   const profile =
     data ??
@@ -63,11 +75,11 @@ export async function GET(request: Request) {
       await admin
         .from("profiles")
         .upsert({
-          agency_name: metadata.agency_name ?? null,
+          agency_name: userMetadata.agency_name ?? null,
           email: user.email ?? null,
-          full_name: metadata.full_name ?? null,
+          full_name: userMetadata.full_name ?? null,
           id: user.id,
-          username: metadata.username ?? null
+          username: userMetadata.username ?? null
         })
         .select("id,email,full_name,username,agency_name,has_access")
         .single<ProfileRow>()
@@ -77,7 +89,7 @@ export async function GET(request: Request) {
     agencyName: profile?.agency_name ?? null,
     email: profile?.email ?? user.email ?? null,
     fullName: profile?.full_name ?? null,
-    hasAccess: Boolean(profile?.has_access),
+    hasAccess: Boolean(profile?.has_access) || metadataHasAccess(appMetadata),
     username: profile?.username ?? null
   });
 }

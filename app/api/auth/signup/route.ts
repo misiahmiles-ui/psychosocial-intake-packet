@@ -3,6 +3,7 @@ import {
   createSupabaseAdminClient,
   hasSupabaseAdminConfig
 } from "@/lib/supabase/server";
+import { updateUserAppMetadata } from "@/lib/supabase/accessMetadata";
 
 type SignupPayload = {
   agencyName?: unknown;
@@ -74,7 +75,13 @@ export async function POST(request: Request) {
   }
 
   if (data.user?.id) {
-    await admin.from("profiles").upsert({
+    await updateUserAppMetadata(admin, data.user.id, {
+      access_package: "standard_agency_access",
+      billing_model: "upfront_plus_monthly",
+      has_access: false
+    });
+
+    const { error: profileError } = await admin.from("profiles").upsert({
       agency_name: agencyName,
       email,
       full_name: fullName,
@@ -82,6 +89,13 @@ export async function POST(request: Request) {
       username,
       updated_at: new Date().toISOString()
     });
+
+    if (profileError) {
+      console.warn("Buyer profile table update skipped.", {
+        code: profileError.code,
+        message: profileError.message
+      });
+    }
   }
 
   return NextResponse.json({ ok: true });

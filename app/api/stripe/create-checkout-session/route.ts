@@ -10,6 +10,11 @@ import {
   getStandardAccessLineItems,
   hasStripeCheckoutConfig
 } from "@/lib/stripe/server";
+import {
+  metadataHasAccess,
+  metadataString,
+  updateUserAppMetadata
+} from "@/lib/supabase/accessMetadata";
 
 export async function POST(request: Request) {
   if (
@@ -38,7 +43,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 
-  const { data: profile } = await admin
+  const appMetadata = user.app_metadata as Record<string, unknown>;
+  const { data: profile, error: profileError } = await admin
     .from("profiles")
     .select("has_access,stripe_customer_id")
     .eq("id", user.id)
@@ -47,17 +53,26 @@ export async function POST(request: Request) {
       stripe_customer_id: string | null;
     }>();
 
-  if (profile?.has_access) {
+  if (profileError) {
+    console.warn("Buyer profile table could not be read for checkout.", {
+      code: profileError.code,
+      message: profileError.message
+    });
+  }
+
+  if (profile?.has_access || metadataHasAccess(appMetadata)) {
     return NextResponse.json({ url: `${getSiteUrl()}/dashboard` });
   }
 
+  const stripeCustomerId =
+    profile?.stripe_customer_id ?? metadataString(appMetadata, "stripe_customer_id");
   const stripe = createStripeClient();
   const session = await stripe.checkout.sessions.create({
     allow_promotion_codes: false,
     billing_address_collection: "auto",
     client_reference_id: user.id,
-    customer: profile?.stripe_customer_id ?? undefined,
-    customer_email: profile?.stripe_customer_id ? undefined : user.email,
+    customer: stripeCustomerId ?? undefined,
+    customer_email: stripeCustomerId ? undefined : user.email,
     line_items: getStandardAccessLineItems(),
     metadata: {
       access_package: "standard_agency_access",
@@ -76,17 +91,31 @@ export async function POST(request: Request) {
     cancel_url: `${getSiteUrl()}/dashboard?checkout=cancelled`
   });
 
-  await admin
+  const customerId =
+    typeof session.customer === "string" ? session.customer : stripeCustomerId;
+
+  await updateUserAppMetadata(admin, user.id, {
+    access_package: "standard_agency_access",
+    billing_model: "upfront_plus_monthly",
+    stripe_checkout_session_id: session.id,
+    stripe_customer_id: customerId
+  });
+
+  const { error: profileUpdateError } = await admin
     .from("profiles")
     .update({
       stripe_checkout_session_id: session.id,
-      stripe_customer_id:
-        typeof session.customer === "string"
-          ? session.customer
-          : profile?.stripe_customer_id ?? null,
+      stripe_customer_id: customerId ?? null,
       updated_at: new Date().toISOString()
     })
     .eq("id", user.id);
+
+  if (profileUpdateError) {
+    console.warn("Buyer profile table update skipped for checkout.", {
+      code: profileUpdateError.code,
+      message: profileUpdateError.message
+    });
+  }
 
   return NextResponse.json({ url: session.url });
 }
