@@ -43,26 +43,42 @@ export function AuthForm({ mode }: AuthFormProps) {
 
     try {
       if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({
+        const response = await fetch("/api/auth/signup", {
+          body: JSON.stringify({
+            agencyName,
+            email,
+            fullName,
+            password,
+            username
+          }),
+          headers: {
+            "Content-Type": "application/json"
+          },
+          method: "POST"
+        });
+
+        if (!response.ok) {
+          const data = (await response.json().catch(() => null)) as {
+            error?: string;
+          } | null;
+          setMessage(data?.error ?? "Account could not be created.");
+          return;
+        }
+
+        const { error } = await supabase.auth.signInWithPassword({
           email,
-          password,
-          options: {
-            data: {
-              agency_name: agencyName.trim(),
-              full_name: fullName.trim(),
-              username: username.trim()
-            },
-            emailRedirectTo: `${window.location.origin}/dashboard`
-          }
+          password
         });
 
         if (error) {
-          setMessage(error.message);
+          setMessage(
+            "Account created, but automatic sign-in did not complete. Please sign in to continue."
+          );
           return;
         }
 
         setMessage(
-          "Account created. Check your email if confirmation is enabled, then sign in to finish access."
+          "Account created. Continue to the dashboard to complete payment."
         );
         router.push("/dashboard");
         router.refresh();
