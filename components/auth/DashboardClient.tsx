@@ -37,15 +37,9 @@ export function DashboardClient() {
               </Link>
               <Link
                 className="inline-flex min-h-12 items-center rounded-lg border border-[#b9c7c3] bg-white px-5 py-3 font-bold text-ink transition hover:border-sea"
-                href="/example/full"
+                href="/example"
               >
-                View Full Example
-              </Link>
-              <Link
-                className="inline-flex min-h-12 items-center rounded-lg border border-[#b9c7c3] bg-white px-5 py-3 font-bold text-ink transition hover:border-sea"
-                href="/presentation"
-              >
-                View Presentation
+                View Example
               </Link>
               <Link
                 className="inline-flex min-h-12 items-center rounded-lg border border-[#b9c7c3] bg-white px-5 py-3 font-bold text-ink transition hover:border-sea"

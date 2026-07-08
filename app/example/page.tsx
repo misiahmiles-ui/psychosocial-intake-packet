@@ -1,10 +1,9 @@
 import Link from "next/link";
-import { ArrowLeft, BadgeCheck, FileText, LockKeyhole } from "lucide-react";
+import { ArrowLeft, BadgeCheck, FileText } from "lucide-react";
 import { ExamplePacketActions } from "@/components/ExamplePacketActions";
 import { ReviewPacket } from "@/components/ReviewPacket";
 import { CREATOR_CREDIT, PRODUCT_NAME } from "@/lib/placeholders";
 import { examplePacket } from "@/lib/examplePacket";
-import { LIMITED_EXAMPLE_STEP_IDS } from "@/lib/exampleAccess";
 
 export default function ExamplePage() {
   return (
@@ -20,17 +19,13 @@ export default function ExamplePage() {
               Back to product page
             </Link>
             <h1 className="mt-2 text-2xl font-bold tracking-normal">
-              Limited fictitious workflow preview
+              Fictitious completed packet example
             </h1>
             <p className="mt-2 text-sm font-semibold text-[#52645f]">
               {PRODUCT_NAME} | {CREATOR_CREDIT}
             </p>
           </div>
-          <ExamplePacketActions
-            filenamePrefix="adult-day-intake-example-preview"
-            stepIds={LIMITED_EXAMPLE_STEP_IDS}
-            variant="preview"
-          />
+          <ExamplePacketActions />
         </div>
       </header>
 
@@ -42,9 +37,9 @@ export default function ExamplePage() {
           </p>
           <p className="mt-2 leading-7 text-[#334642]">
             The participant, provider, company, phone numbers, email addresses,
-            and addresses are fictitious. This public preview shows selected
-            psychosocial intake workflow sections so prospective buyers can see
-            the structure before creating access.
+            and addresses are fictitious. Use this example to understand the
+            kind of information that belongs in each section before completing a
+            real intake.
           </p>
         </div>
 
@@ -54,26 +49,13 @@ export default function ExamplePage() {
             Example PDF downloads
           </p>
           <p className="mt-2 leading-7 text-[#52645f]">
-            Public downloads are intentionally limited to selected intake
-            workflow sections. The full completed example PDF is available
-            inside the protected dashboard after Standard Agency Access is
-            active.
+            Download the example draft PDF to see editable fields, checkbox and
+            radio controls, selected-answer summaries, and scoring output.
+            Download the final PDF to see a completed packet-style export.
           </p>
-          <Link
-            href="/signup"
-            className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg border border-[#b9c7c3] bg-white px-4 py-2 text-sm font-bold text-ink transition hover:border-sea"
-          >
-            <LockKeyhole className="h-4 w-4 text-sea" aria-hidden="true" />
-            Get access for the full example
-          </Link>
         </div>
 
-        <ReviewPacket
-          packet={examplePacket}
-          stepIds={LIMITED_EXAMPLE_STEP_IDS}
-          title="Limited Preview Review"
-          description="This public preview shows selected completed fields from the psychosocial intake workflow. The full completed example includes additional consents, ROI, home visit, discharge planning, and optional authorization sections."
-        />
+        <ReviewPacket packet={examplePacket} />
       </section>
     </main>
   );

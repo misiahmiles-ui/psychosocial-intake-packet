@@ -4,23 +4,7 @@ import type { FieldDefinition, IntakePacket, IntakeStep } from "@/types/intake";
 import { INTAKE_STEPS } from "@/lib/sections";
 import { formatValue, getValueByPath, scoreMentalStatus } from "@/lib/packetUtils";
 
-type ReviewPacketProps = {
-  description?: string;
-  packet: IntakePacket;
-  stepIds?: string[];
-  title?: string;
-};
-
-export function ReviewPacket({
-  description = "Review entries before printing or exporting. Blank fields are kept visibly blank in downloaded packet output.",
-  packet,
-  stepIds,
-  title = "Packet Review"
-}: ReviewPacketProps) {
-  const steps = stepIds
-    ? INTAKE_STEPS.filter((step) => stepIds.includes(step.id))
-    : INTAKE_STEPS;
-
+export function ReviewPacket({ packet }: { packet: IntakePacket }) {
   return (
     <section className="rounded-lg border border-[#d7dfdc] bg-white p-5 shadow-sm sm:p-6">
       <div className="mb-6">
@@ -28,15 +12,16 @@ export function ReviewPacket({
           Review
         </p>
         <h2 className="mt-2 text-2xl font-bold tracking-normal text-ink">
-          {title}
+          Packet Review
         </h2>
         <p className="mt-2 max-w-3xl leading-7 text-[#52645f]">
-          {description}
+          Review entries before printing or exporting. Blank fields are kept
+          visibly blank in downloaded packet output.
         </p>
       </div>
 
       <div className="grid gap-4">
-        {steps.map((step) => (
+        {INTAKE_STEPS.map((step) => (
           <ReviewStep key={step.id} step={step} packet={packet} />
         ))}
       </div>
