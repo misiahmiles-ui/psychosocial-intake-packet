@@ -14,7 +14,6 @@ Created by Marvin Miles, LSW.
 - Print action.
 - Final PDF export.
 - Mental status screening with automatic score and impairment level.
-- In-app guide page at `/guide`.
 - Fictitious completed example at `/example`.
 - Company placeholders for headers, consent language, and exports.
 - Paid buyer access layer using Supabase Auth, Supabase profiles, and Stripe Checkout.
@@ -130,9 +129,7 @@ https://your-netlify-site.netlify.app/reset-password
 Use `http://127.0.0.1:3002/reset-password` as an additional local redirect URL
 while testing on the local preview server.
 
-## In-app guide and example
-
-The README information is also available inside the web app at `/guide` so buyers and users can access the operating notes without opening this source file.
+## Example packet
 
 The app includes a fictitious completed participant example at `/example`. The example uses fake participant, company, provider, phone, email, and address information. Users can review the completed sample on screen and download an example draft PDF or example final PDF to understand what kind of information belongs in each section.
 

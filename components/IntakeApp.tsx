@@ -96,13 +96,6 @@ export function IntakeApp() {
                   {PRODUCT_NAME}
                 </Link>
                 <Link
-                  href="/guide"
-                  onClick={confirmNavigationAway}
-                  className="text-sm font-bold text-[#52645f] hover:text-sea"
-                >
-                  Guide
-                </Link>
-                <Link
                   href="/example"
                   onClick={confirmNavigationAway}
                   className="text-sm font-bold text-[#52645f] hover:text-sea"

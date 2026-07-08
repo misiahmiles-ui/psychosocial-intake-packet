@@ -17,9 +17,9 @@ export function DashboardClient() {
               Adult Day Intake Pro™ Dashboard
             </h1>
             <p className="mt-4 max-w-3xl leading-7 text-[#52645f]">
-              Start a new workflow, review the guide, or open the fictitious
-              example. The documentation workflow does not save client/member
-              assessment data to Supabase or Netlify.
+              Start a new workflow or open the fictitious example. The
+              documentation workflow does not save client/member assessment
+              data to Supabase or Netlify.
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
               <Link
@@ -28,12 +28,6 @@ export function DashboardClient() {
               >
                 Start New Intake Workflow
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </Link>
-              <Link
-                className="inline-flex min-h-12 items-center rounded-lg border border-[#b9c7c3] bg-white px-5 py-3 font-bold text-ink transition hover:border-sea"
-                href="/guide"
-              >
-                Open Guide
               </Link>
               <Link
                 className="inline-flex min-h-12 items-center rounded-lg border border-[#b9c7c3] bg-white px-5 py-3 font-bold text-ink transition hover:border-sea"

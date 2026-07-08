@@ -8,6 +8,7 @@ dist
 .env.local
 .vercel
 tmp
+owner-documents
 *.tsbuildinfo
 
 # Local Netlify folder
