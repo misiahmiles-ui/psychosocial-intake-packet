@@ -20,6 +20,10 @@ import {
 
 type PdfMode = "draft" | "final";
 
+type PdfBuildOptions = {
+  stepIds?: string[];
+};
+
 type PdfContext = {
   pdfDoc: PDFDocument;
   page: PDFPage;
@@ -46,7 +50,8 @@ const mentalStatusOptions = [
 
 export async function buildPacketPdf(
   packet: IntakePacket,
-  mode: PdfMode
+  mode: PdfMode,
+  options: PdfBuildOptions = {}
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -85,7 +90,11 @@ export async function buildPacketPdf(
     22
   );
 
-  INTAKE_STEPS.forEach((step) => drawStep(context, step));
+  const steps = options.stepIds
+    ? INTAKE_STEPS.filter((step) => options.stepIds?.includes(step.id))
+    : INTAKE_STEPS;
+
+  steps.forEach((step) => drawStep(context, step));
   drawPageNumbers(context);
   if (mode === "draft" && context.form) {
     drawDraftWatermark(context);

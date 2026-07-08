@@ -103,15 +103,15 @@ export function IntakeApp() {
                   Guide
                 </Link>
                 <Link
-                  href="/example"
+                  href="/example/full"
                   onClick={confirmNavigationAway}
                   className="text-sm font-bold text-[#52645f] hover:text-sea"
                 >
-                  Example
+                  Full Example
                 </Link>
               </div>
               <h1 className="mt-2 text-2xl font-bold tracking-normal">
-                No-retention digital intake packet
+                No-retention digital intake workflow
               </h1>
               <p className="mt-1 text-sm font-semibold text-[#52645f]">
                 {CREATOR_CREDIT}

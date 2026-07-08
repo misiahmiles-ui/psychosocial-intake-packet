@@ -92,6 +92,9 @@ export function AdultDayIntakeProMarketing() {
             <Link className="text-[#45613a] hover:text-[#2f4528]" href="/example">
               Example
             </Link>
+            <Link className="text-[#45613a] hover:text-[#2f4528]" href="/presentation">
+              Presentation
+            </Link>
             <Link className="text-[#45613a] hover:text-[#2f4528]" href="/guide">
               Guide
             </Link>
@@ -150,6 +153,12 @@ export function AdultDayIntakeProMarketing() {
                 className="inline-flex min-h-12 items-center rounded-lg border border-white/55 bg-white px-5 py-3 font-bold text-[#183c5a] transition hover:bg-[#fff8f2]"
               >
                 Access the Hosted Workflow
+              </Link>
+              <Link
+                href="/presentation"
+                className="inline-flex min-h-12 items-center rounded-lg border border-white/55 bg-white/15 px-5 py-3 font-bold text-white transition hover:bg-white/25"
+              >
+                View Presentation
               </Link>
             </div>
           </div>
