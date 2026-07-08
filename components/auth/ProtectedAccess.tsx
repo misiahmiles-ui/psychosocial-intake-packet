@@ -170,11 +170,11 @@ export function ProtectedAccess({ children }: ProtectedAccessProps) {
             </div>
             <div>
               <h1 className="text-2xl font-bold tracking-normal">
-                Protected packet access
+                Protected workflow access
               </h1>
               <p className="mt-2 leading-7 text-[#52645f]">
                 Sign in and complete Standard Agency Access to use the hosted
-                packet workflow.
+                Adult Day Intake Pro™ workflow.
               </p>
             </div>
           </div>
@@ -188,7 +188,7 @@ export function ProtectedAccess({ children }: ProtectedAccessProps) {
           {status.state === "setup-missing" ? (
             <div className="mt-5 rounded-lg border border-[#e7c5b9] bg-[#fff8f5] p-4 text-sm font-semibold leading-6 text-[#643524]">
               Account access is not configured yet. Add Supabase and Stripe
-              environment variables in Netlify before launch. The local packet
+              environment variables in Netlify before launch. The local PDF
               export workflow remains no-retention.
             </div>
           ) : null}
@@ -225,7 +225,7 @@ export function ProtectedAccess({ children }: ProtectedAccessProps) {
                 <p className="mt-2 text-sm font-semibold leading-6 text-[#643524]">
                   This account is created, but payment has not been confirmed.
                   Complete the upfront access payment and monthly hosted access
-                  subscription to unlock the packet dashboard.
+                  subscription to unlock the hosted workflow dashboard.
                 </p>
               </div>
               <button
@@ -262,7 +262,7 @@ export function ProtectedAccess({ children }: ProtectedAccessProps) {
             <p className="flex gap-2">
               <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-sea" />
               <span>
-                Supabase stores buyer account and access status only. Packet
+                Supabase stores buyer account and access status only. Workflow
                 responses remain local to the current browser session until the
                 user downloads, exports, or prints a PDF.
               </span>
@@ -270,12 +270,12 @@ export function ProtectedAccess({ children }: ProtectedAccessProps) {
           </div>
 
           <p className="mt-5 text-sm font-semibold text-[#52645f]">
-            Looking for the blossom product page?{" "}
+            Looking for the product page?{" "}
             <Link
               className="font-bold text-sea hover:text-[#0b615b]"
               href="/psychosocial-intake-packet"
             >
-              Open The Psychosocial Intake Packet page
+              Open Adult Day Intake Pro™
             </Link>
           </p>
         </div>

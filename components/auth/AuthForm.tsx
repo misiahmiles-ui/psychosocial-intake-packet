@@ -118,8 +118,8 @@ export function AuthForm({ mode }: AuthFormProps) {
           </h1>
           <p className="mt-2 leading-7 text-[#52645f]">
             {mode === "signup"
-              ? "Create the account your agency will use to access the packet."
-              : "Sign in to access the Psychosocial Intake Packet dashboard."}
+              ? "Create the account your agency will use to access the hosted workflow."
+              : "Sign in to access the Adult Day Intake Pro™ dashboard."}
           </p>
         </div>
       </div>
@@ -224,7 +224,7 @@ export function AuthForm({ mode }: AuthFormProps) {
 
       <div className="mt-5 rounded-lg border border-[#cde7df] bg-mint p-4 text-sm font-semibold leading-6 text-[#334642]">
         Account access stores buyer login and purchase status only. Client,
-        member, participant, logo, and packet responses are not saved to
+        member, participant, logo, and workflow responses are not saved to
         Supabase through the intake workflow.
       </div>
 
@@ -238,12 +238,12 @@ export function AuthForm({ mode }: AuthFormProps) {
         </Link>
       </p>
       <p className="mt-3 text-sm font-semibold text-[#52645f]">
-        Looking for the blossom product page?{" "}
+        Looking for the product page?{" "}
         <Link
           className="font-bold text-sea hover:text-[#0b615b]"
           href="/psychosocial-intake-packet"
         >
-          View it here
+            View it here
         </Link>
       </p>
     </div>

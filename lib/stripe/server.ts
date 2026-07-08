@@ -60,9 +60,9 @@ function getStandardAccessUpfrontLineItem(): CheckoutLineItem {
       currency: "usd",
       unit_amount: Number.isFinite(fallbackAmount) ? fallbackAmount : 48700,
       product_data: {
-        name: "Standard Agency Access - Upfront Access",
+        name: "Adult Day Intake Pro™ - Standard Agency Access",
         description:
-          "One-time upfront access charge for the hosted Psychosocial Intake Packet workflow."
+          "Upfront access fee for the hosted psychosocial intake and PDF documentation workflow."
       }
     }
   };
@@ -87,9 +87,9 @@ function getStandardAccessMonthlyLineItem(): CheckoutLineItem {
     price_data: {
       currency: "usd",
       product_data: {
-        name: "Standard Agency Access - Hosted Access and Maintenance",
+        name: "Adult Day Intake Pro™ - Hosted Access and Maintenance",
         description:
-          "Monthly hosted access and maintenance for the Psychosocial Intake Packet workflow."
+          "Monthly hosted access and standard maintenance for the hosted psychosocial intake and PDF documentation workflow."
       },
       recurring: {
         interval: "month"

@@ -1,13 +1,13 @@
-# Adult Day Intake Pro
+# Adult Day Intake Pro™
 
-White-label digital intake packet workflow for Adult Medical Day Care and Adult Day Health programs.
+Psychosocial Intake & PDF Documentation Workflow for adult day care and adult medical daycare programs.
 
 Created by Marvin Miles, LSW.
 
 ## What is included
 
 - Responsive landing page for the digital product.
-- 18-step intake workflow covering company setup plus the full packet structure.
+- 18-step intake workflow covering company setup plus PDF packet output structure.
 - No-retention active browser session workflow.
 - Download Editable Draft PDF.
 - Review screen.
@@ -15,7 +15,7 @@ Created by Marvin Miles, LSW.
 - Final PDF export.
 - Mental status screening with automatic score and impairment level.
 - In-app guide page at `/guide`.
-- Fictitious completed example packet at `/example`.
+- Fictitious completed example at `/example`.
 - Company placeholders for headers, consent language, and exports.
 - Paid buyer access layer using Supabase Auth, Supabase profiles, and Stripe Checkout.
 
@@ -33,17 +33,17 @@ This is a privacy-conscious/no-retention workflow design, not a HIPAA compliance
 
 The app uses local PDF export only and does not save drafts internally. Editable Draft PDF behavior may vary by PDF viewer. Adobe Acrobat Reader is recommended for completing or revising downloaded editable draft PDFs. Checkbox, multiple-choice, and scoring responses include readable selected-answer summaries to preserve clarity across PDF viewers.
 
-## Standard Agency Access - $487 Up Front + $19/Month
+## Standard Agency Access - $487 Upfront Access Fee + $19/Month
 
-Standard Agency Access provides one agency/location with access to the standard hosted version of the digital psychosocial intake workflow. The tool is designed for Adult Medical Day Care, Adult Day Health, social workers, interdisciplinary team members, intake coordinators, and behavioral health documentation teams.
+Standard Agency Access gives one adult day care or adult medical daycare program access to the hosted Adult Day Intake Pro™ digital psychosocial intake workflow. The workflow is designed for adult day care, adult medical daycare, social work, interdisciplinary team members, intake coordinators, and behavioral health documentation teams.
 
-This package includes a $487 upfront access charge plus a $19/month hosted access and maintenance subscription. The tool remains available while the buyer subscription is active and the hosted version is active. Agencies that want their own dedicated deployment, custom form language, permanent branding, staff logins, or long-term independent control may request a separate Agency-Owned Setup package.
+The $487 upfront access fee activates the agency's access to the standard hosted workflow. The $19/month subscription covers continued hosted access and standard maintenance for the hosted version. Continued hosted access depends on an active monthly subscription and the active availability of the hosted site. Agencies that want their own dedicated deployment, custom form language, permanent branding, staff logins, or long-term independent control may request a separate Agency-Owned Setup package.
 
 ### Package includes
 
 - Buyer account login for protected hosted access.
 - Monthly hosted access and standard maintenance for the hosted version.
-- Access to the standard digital psychosocial intake workflow.
+- Access to the Adult Day Intake Pro™ hosted workflow.
 - Facility/company information entry.
 - Session-based company logo upload.
 - Psychosocial assessment sections.
@@ -51,7 +51,7 @@ This package includes a $487 upfront access charge plus a $19/month hosted acces
 - Review page before export/print.
 - Download Editable Draft PDF option.
 - Export Final PDF option.
-- Print-ready packet option.
+- Print-ready PDF packet output.
 - Wet-signature lines for member, responsible party, and staff/witness.
 - Signature reminder language: "Signature required after printout. Wet signature must be obtained according to agency policy."
 - No internal draft saving.
@@ -88,8 +88,8 @@ This project is set up for the simple paid-access model:
 4. Stripe sends webhooks back to the app.
 5. The webhook marks the buyer profile as `has_access = true` while the subscription is active.
 6. Subscription update/cancellation webhooks update access when Stripe reports the subscription is no longer active.
-7. The buyer signs in and opens the protected packet dashboard.
-8. Packet/client/member information remains local-only and is saved only by PDF download/export/print.
+7. The buyer signs in and opens the protected workflow dashboard.
+8. Client/member information remains local-only and is saved only by PDF download/export/print.
 
 Run `supabase/schema.sql` in the Supabase SQL editor before launch. This creates the `profiles` table and signup trigger for buyer profiles only.
 
@@ -108,7 +108,7 @@ STANDARD_ACCESS_UPFRONT_PRICE_CENTS=48700
 STANDARD_ACCESS_MONTHLY_PRICE_CENTS=1900
 ```
 
-The Stripe price IDs are optional for local testing. If they are left blank, checkout creates inline Stripe prices for `$487` up front plus `$19/month`. For the live product, create one one-time Stripe Price for `$487` and one recurring monthly Stripe Price for `$19/month`, then add their IDs as `STRIPE_STANDARD_ACCESS_UPFRONT_PRICE_ID` and `STRIPE_STANDARD_ACCESS_MONTHLY_PRICE_ID` in Netlify.
+The Stripe price IDs are optional for local testing. If they are left blank, checkout creates inline Stripe prices for `$487` up front plus `$19/month`. For the live product, create one non-recurring Stripe Price for `$487` and one recurring monthly Stripe Price for `$19/month`, then add their IDs as `STRIPE_STANDARD_ACCESS_UPFRONT_PRICE_ID` and `STRIPE_STANDARD_ACCESS_MONTHLY_PRICE_ID` in Netlify.
 
 In Stripe, create a webhook endpoint pointing to:
 

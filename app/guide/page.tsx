@@ -7,13 +7,13 @@ import {
 } from "@/lib/placeholders";
 
 const included = [
-  "18-step intake workflow covering company setup plus the full packet structure",
+  "18-step intake workflow covering company setup plus PDF packet output structure",
   "No-retention active browser session workflow",
   "Download Editable Draft PDF",
   "Export Final PDF",
   "Print and Clear Form controls",
   "Mental status screening with automatic score and interpretation",
-  "Fictitious completed example packet",
+  "Fictitious completed example",
   "White-label company placeholders for headers, consent language, and exports"
 ];
 
@@ -30,14 +30,14 @@ const nextSteps = [
 const standardAgencyIncludes = [
   "Buyer account login for protected hosted access",
   "$19/month hosted access and maintenance plan",
-  "Access to the standard digital psychosocial intake workflow",
+  "Access to the Adult Day Intake Pro™ hosted workflow",
   "Facility/company information entry",
   "Session-based company logo upload",
   "Psychosocial assessment, consent, and ROI sections",
   "Review page before export/print",
   "Download Editable Draft PDF option",
   "Export Final PDF option",
-  "Print-ready packet option",
+  "Print-ready PDF packet output",
   "Wet-signature lines and signature-after-printout reminder language",
   "No internal draft saving, client/member database storage, or browser draft persistence"
 ];
@@ -118,23 +118,23 @@ export default function GuidePage() {
               Sales package
             </p>
             <h2 className="mt-3 text-xl font-bold">
-              Standard Agency Access - $487 up front + $19/month
+              Standard Agency Access - $487 upfront access fee + $19/month
             </h2>
             <p className="mt-3 leading-7 text-[#52645f]">
-              Standard Agency Access provides one agency/location with access to
-              the standard hosted version of the digital psychosocial intake
-              workflow. Continued access depends on an active monthly
-              subscription and the active availability of the hosted site. The
-              monthly fee covers hosted access and standard maintenance for this
-              hosted version. Customization, dedicated support, compliance
-              review, and agency-owned deployment are not included unless
-              provided under a separate written agreement.
+              Standard Agency Access gives one adult day care or adult medical
+              daycare program access to the hosted digital psychosocial intake
+              workflow. The $487 upfront access fee activates the agency&apos;s
+              access to the standard hosted workflow. The $19/month subscription
+              covers continued hosted access and standard maintenance for the
+              hosted version. Continued hosted access depends on an active
+              monthly subscription and the active availability of the hosted
+              site.
             </p>
             <p className="mt-3 leading-7 text-[#52645f]">
               This tool is designed as a no-retention, local PDF export-only
               workflow. Assessment information remains active only during the
               current browser session unless the user downloads or prints the
-              packet. The app does not intentionally save completed intakes,
+              PDF packet output. The app does not intentionally save completed intakes,
               drafts, client/member information, or uploaded logos inside the
               application.
             </p>
@@ -169,7 +169,7 @@ export default function GuidePage() {
             </p>
             <p className="mt-3 rounded-lg border border-[#cde7df] bg-mint p-4 text-sm font-semibold leading-6 text-[#334642]">
               Access setup note: Supabase stores buyer login and access status
-              only. Stripe handles payment. The intake packet workflow does not
+              only. Stripe handles payment. The intake workflow does not
               save client/member responses to Supabase, Netlify, or a database.
             </p>
           </section>

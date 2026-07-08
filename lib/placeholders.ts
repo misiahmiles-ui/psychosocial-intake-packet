@@ -1,4 +1,4 @@
-export const PRODUCT_NAME = "Adult Day Intake Pro";
+export const PRODUCT_NAME = "Adult Day Intake Pro™";
 export const CREATOR_CREDIT = "Created by Marvin Miles, LSW";
 
 export const BRAND_PLACEHOLDERS = {

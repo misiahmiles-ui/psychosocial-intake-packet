@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Adult Day Intake Pro",
+  title:
+    "Adult Day Intake Pro™ | Psychosocial Intake & PDF Documentation Workflow",
   description:
-    "White-label digital intake packets for adult day and adult medical day care programs."
+    "A structured digital psychosocial intake and PDF documentation workflow for adult day care and adult medical daycare programs."
 };
 
 export default function RootLayout({

@@ -3,9 +3,9 @@ import Link from "next/link";
 import { AuthForm } from "@/components/auth/AuthForm";
 
 export const metadata: Metadata = {
-  title: "Create Access | Adult Day Intake Pro",
+  title: "Create Access | Adult Day Intake Pro™",
   description:
-    "Create an agency access account for the Psychosocial Intake Packet."
+    "Create a Standard Agency Access account for the Adult Day Intake Pro™ hosted workflow."
 };
 
 export default function SignupPage() {
@@ -14,7 +14,7 @@ export default function SignupPage() {
       <section className="mx-auto grid min-h-screen max-w-6xl items-center gap-8 px-5 py-10 sm:px-8 lg:grid-cols-[0.9fr_1.1fr] lg:px-10">
         <div>
           <Link className="text-sm font-bold text-sea hover:text-[#0b615b]" href="/">
-            Adult Day Intake Pro
+            Adult Day Intake Pro™
           </Link>
           <h2 className="mt-4 text-4xl font-bold tracking-normal">
             Create Standard Agency Access.
@@ -23,13 +23,13 @@ export default function SignupPage() {
             Create the account first, then complete the $487 upfront access
             checkout with the $19/month hosted access and maintenance
             subscription. After payment is confirmed, this account can open the
-            packet workflow.
+            hosted workflow.
           </p>
           <Link
             className="mt-5 inline-flex font-bold text-sea hover:text-[#0b615b]"
             href="/psychosocial-intake-packet"
           >
-            View the blossom product page
+            View the product page
           </Link>
         </div>
         <AuthForm mode="signup" />
