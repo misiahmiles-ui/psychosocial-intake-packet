@@ -35,18 +35,13 @@ const supports = [
   "Care planning and referral considerations"
 ];
 
-const notIncluded = [
-  "Custom agency deployment",
-  "Permanent custom branding",
-  "Custom consent rewriting",
-  "Custom intake sections",
-  "Multiple staff seats unless separately configured",
-  "Custom user roles",
-  "Saved drafts",
-  "HIPAA certification",
-  "BAA review",
-  "Compliance review",
-  "Dedicated agency-owned hosting unless separately agreed in writing"
+const packageBoundaries = [
+  "Custom agency deployment is not included unless separately purchased.",
+  "Permanent built-in agency branding is not included in the standard hosted version.",
+  "Custom consent rewriting or custom intake-section development is not included.",
+  "Multiple staff seats, custom user roles, and staff permission levels are not included unless separately configured.",
+  "HIPAA certification, BAA review, legal review, and compliance review remain the agency's responsibility unless separately agreed in writing.",
+  "Dedicated agency-owned hosting and long-term custom maintenance are not included unless separately purchased."
 ];
 
 const workflowCards = [
@@ -274,27 +269,39 @@ export function AdultDayIntakeProMarketing() {
       </section>
 
       <section className="border-y border-[#eadad2] bg-[#fffaf6]">
-        <div className="mx-auto grid max-w-7xl gap-8 px-5 py-14 sm:px-8 lg:grid-cols-[0.95fr_1.05fr] lg:px-10">
-          <div>
-            <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#c85f75]">
-              What Is Not Included
+        <div className="mx-auto max-w-7xl px-5 py-10 sm:px-8 lg:px-10">
+          <div className="rounded-lg border border-[#eadad2] bg-white/80 p-5 sm:p-6">
+            <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#45613a]">
+              Scope clarification
             </p>
-            <h2 className="mt-3 text-3xl font-bold tracking-normal text-[#174f80]">
-              Clear access limits before purchase
+            <h2 className="mt-3 text-2xl font-bold tracking-normal text-[#174f80]">
+              Standard Agency Access Scope
             </h2>
-            <p className="mt-4 leading-7 text-[#435665]">
-              Standard Agency Access is the hosted standard workflow. It does
-              not replace legal review, compliance review, clinical judgment, or
-              agency policy review.
+            <p className="mt-4 max-w-5xl leading-7 text-[#435665]">
+              Standard Agency Access includes the hosted digital intake
+              workflow, PDF export tools, standard access, and hosted
+              maintenance. The standard package does not include custom agency
+              deployment, permanent built-in branding, custom form rewriting,
+              staff-role configuration, HIPAA/BAA review, legal/compliance
+              review, or agency-owned hosting unless separately agreed in
+              writing.
             </p>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {notIncluded.map((item) => (
-              <div key={item} className="flex gap-3 rounded-lg border border-[#eadad2] bg-white p-4">
-                <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-[#c85f75]" />
-                <span className="font-semibold text-[#273d4e]">{item}</span>
+            <div className="mt-5 border-t border-[#eadad2] pt-4">
+              <p className="text-sm font-bold text-[#45613a]">
+                Package boundaries
+              </p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {packageBoundaries.map((item) => (
+                  <div
+                    key={item}
+                    className="flex gap-3 rounded-lg bg-[#fff8f2] px-3 py-2 text-sm leading-6 text-[#52645f]"
+                  >
+                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#b8c7a7]" />
+                    <span>{item}</span>
+                  </div>
+                ))}
               </div>
-            ))}
+            </div>
           </div>
         </div>
       </section>
