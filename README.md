@@ -92,6 +92,80 @@ This project is set up for the simple paid-access model:
 
 Run `supabase/schema.sql` in the Supabase SQL editor before launch. This creates the `profiles` table and signup trigger for buyer profiles only.
 
+## Product Owner / Super Administrator access
+
+The app includes a protected owner-only route at `/owner`.
+
+Owner access is separate from buyer access. The owner account does not need a Stripe payment, does not require a monthly subscription, does not count as an agency customer seat, and is not affected by subscription cancellation. The owner role is verified server-side through Supabase profile/app metadata before owner tools are shown.
+
+Owner access allows the creator to:
+
+- Open the Owner Control Center.
+- Open the full blank psychosocial intake workflow in Owner Review Mode.
+- Preview the buyer workflow while bypassing Stripe only for the owner account.
+- Load a fictitious demonstration case.
+- Test editable draft PDF, final PDF, and print layout output.
+- Click directly into every workflow section from the owner section index.
+
+Owner access does not create a clinical record repository. Customer-entered client/member/participant information, drafts, uploaded logos, and completed packets are not stored for owner viewing.
+
+### Owner role activation
+
+1. Create or confirm the owner account in Supabase Auth.
+2. Run `supabase/schema.sql` in Supabase SQL Editor so `profiles.account_role` exists.
+3. Open `supabase/owner-role-activation.sql`.
+4. Replace `<OWNER_EMAIL_HERE>` with the owner account email in the Supabase SQL Editor only.
+5. Run the edited SQL in Supabase SQL Editor.
+6. Do not commit the edited SQL with the real owner email address.
+7. Sign in with the owner account and open `/owner`.
+
+No additional environment variable is required for owner access. The owner account is activated through Supabase role data and server-verified app metadata.
+
+### Owner feature testing
+
+Run these checks before deploying owner-access changes:
+
+```bash
+pnpm run test:owner
+pnpm run typecheck
+pnpm build
+```
+
+Then sign in as the owner account and confirm:
+
+1. `/owner` opens the Owner Control Center.
+2. `/owner/intake?mode=review` opens the blank workflow with the Owner Review Mode banner.
+3. `/owner/intake?mode=buyer` previews the normal purchaser workflow.
+4. `/owner/intake?mode=review&demo=1` loads only fictitious demonstration data.
+5. Draft PDF, final PDF, and print tests work from the Owner Control Center.
+6. A non-owner account cannot open owner tools.
+
+### Owner deployment steps
+
+1. Commit and deploy the app after the build passes.
+2. In Supabase, run `supabase/schema.sql` if the deployed database has not yet received the `account_role` column.
+3. Run the edited `supabase/owner-role-activation.sql` in Supabase SQL Editor for the owner account only.
+4. Do not add the owner email to the repository, browser code, Netlify public variables, or Stripe metadata.
+5. Confirm the deployed owner account can open `/owner` without going through Stripe checkout.
+6. Confirm regular buyer signup, Stripe checkout, webhook unlock, dashboard access, intake export, and print still work.
+
+### Owner rollback
+
+To remove owner access from an account without deleting buyer profiles or clinical workflow code, run this in Supabase SQL Editor for the affected owner email:
+
+```sql
+update public.profiles
+set account_role = 'buyer', updated_at = now()
+where lower(email) = lower('<OWNER_EMAIL_HERE>');
+
+update auth.users
+set raw_app_meta_data =
+  coalesce(raw_app_meta_data, '{}'::jsonb) - 'account_role' - 'owner_access'
+where lower(email) = lower('<OWNER_EMAIL_HERE>');
+```
+
+To fully roll back the owner feature code, revert the owner-access commit and redeploy. Do not delete the `profiles` table, buyer access fields, Stripe webhook settings, or any live buyer records.
+
 Add these environment variables in Netlify:
 
 ```bash

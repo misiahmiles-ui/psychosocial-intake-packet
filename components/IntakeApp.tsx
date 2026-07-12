@@ -19,10 +19,31 @@ import { FormSection } from "./FormSection";
 import { IntakeStepper } from "./IntakeStepper";
 import { ReviewPacket } from "./ReviewPacket";
 
-export function IntakeApp() {
-  const [activeIndex, setActiveIndex] = useState(0);
+export type IntakeAccessMode = "standard" | "owner-review" | "owner-buyer-preview";
+
+type IntakeAppProps = {
+  accessMode?: IntakeAccessMode;
+  autoPrint?: boolean;
+  demonstrationLoaded?: boolean;
+  initialPacket?: IntakePacket;
+  initialStepIndex?: number;
+};
+
+export function IntakeApp({
+  accessMode = "standard",
+  autoPrint = false,
+  demonstrationLoaded = false,
+  initialPacket,
+  initialStepIndex = 0
+}: IntakeAppProps) {
+  const initialIndex = Math.min(Math.max(initialStepIndex, 0), INTAKE_STEPS.length);
+  const [activeIndex, setActiveIndex] = useState(initialIndex);
+  const formDefaults = useMemo(
+    () => clonePacket(initialPacket ?? defaultValues),
+    [initialPacket]
+  );
   const methods = useForm<IntakePacket>({
-    defaultValues,
+    defaultValues: formDefaults,
     mode: "onBlur"
   });
   const watchedPacket = useWatch({ control: methods.control }) as IntakePacket;
@@ -57,8 +78,17 @@ export function IntakeApp() {
     return () => window.removeEventListener("beforeunload", warnBeforeUnload);
   }, [hasEnteredInfo]);
 
+  useEffect(() => {
+    if (!autoPrint) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => window.print(), 700);
+    return () => window.clearTimeout(timer);
+  }, [autoPrint]);
+
   function clear() {
-    methods.reset(defaultValues);
+    methods.reset(clonePacket(defaultValues));
     setActiveIndex(0);
   }
 
@@ -116,6 +146,42 @@ export function IntakeApp() {
             </div>
           </div>
         </header>
+
+        {accessMode !== "standard" ? (
+          <section className="no-print border-b border-[#cde7df] bg-mint">
+            <div className="mx-auto flex max-w-7xl flex-col gap-3 px-5 py-4 sm:px-8 lg:flex-row lg:items-center lg:justify-between lg:px-10">
+              <div>
+                <p className="font-bold text-sea">
+                  {accessMode === "owner-review"
+                    ? "Owner Review Mode"
+                    : "Owner Buyer-Simulation Mode"}
+                </p>
+                <p className="mt-1 text-sm font-semibold leading-6 text-[#334642]">
+                  {accessMode === "owner-review"
+                    ? "Navigation and validation are unlocked for product inspection. No client information is stored."
+                    : "Owner preview of the normal purchaser workflow. Stripe is bypassed only because the signed-in account has the owner role."}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {demonstrationLoaded ? (
+                  <button
+                    type="button"
+                    onClick={clear}
+                    className="inline-flex min-h-10 items-center rounded-lg border border-[#b9c7c3] bg-white px-3 py-2 text-sm font-bold text-ink transition hover:border-sea"
+                  >
+                    Clear Demonstration Data
+                  </button>
+                ) : null}
+                <a
+                  href="/owner"
+                  className="inline-flex min-h-10 items-center rounded-lg border border-[#b9c7c3] bg-white px-3 py-2 text-sm font-bold text-ink transition hover:border-sea"
+                >
+                  Owner Control Center
+                </a>
+              </div>
+            </div>
+          </section>
+        ) : null}
 
         <div className="no-print mx-auto grid max-w-7xl gap-6 px-5 py-6 sm:px-8 lg:grid-cols-[18rem_1fr] lg:px-10">
           <aside className="lg:sticky lg:top-5 lg:self-start">
@@ -199,4 +265,8 @@ function isStepStarted(step: IntakeStep, packet: IntakePacket) {
   return fields.some((field) =>
     isMeaningfulValue(getValueByPath(packet, field.path))
   );
+}
+
+function clonePacket(packet: IntakePacket) {
+  return JSON.parse(JSON.stringify(packet)) as IntakePacket;
 }

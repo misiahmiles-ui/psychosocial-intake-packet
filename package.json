@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "test:owner": "node scripts/owner-access-check.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

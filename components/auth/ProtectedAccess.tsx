@@ -13,7 +13,7 @@ type AccessStatus =
   | { state: "loading" }
   | { state: "signed-out" }
   | { state: "needs-payment"; email: string | null }
-  | { state: "active"; email: string | null }
+  | { state: "active"; email: string | null; isOwner: boolean }
   | { state: "setup-missing" }
   | { state: "error"; message: string };
 
@@ -77,11 +77,12 @@ export function ProtectedAccess({ children }: ProtectedAccessProps) {
     const data = (await response.json()) as {
       hasAccess: boolean;
       email: string | null;
+      isOwner?: boolean;
     };
 
     setStatus(
       data.hasAccess
-        ? { state: "active", email: data.email }
+        ? { state: "active", email: data.email, isOwner: data.isOwner === true }
         : { state: "needs-payment", email: data.email }
     );
   }, [supabase]);
@@ -146,13 +147,28 @@ export function ProtectedAccess({ children }: ProtectedAccessProps) {
             <p className="font-semibold text-[#52645f]">
               Signed in{status.email ? ` as ${status.email}` : ""}.
             </p>
-            <button
-              className="font-bold text-sea hover:text-[#0b615b]"
-              type="button"
-              onClick={handleSignOut}
-            >
-              Sign out
-            </button>
+            <div className="flex flex-wrap items-center gap-3">
+              {status.isOwner ? (
+                <>
+                  <span className="rounded-full border border-[#cde7df] bg-mint px-3 py-1 font-bold text-sea">
+                    Product Owner Access &mdash; No Subscription Required
+                  </span>
+                  <Link
+                    className="font-bold text-sea hover:text-[#0b615b]"
+                    href="/owner"
+                  >
+                    Owner Control Center
+                  </Link>
+                </>
+              ) : null}
+              <button
+                className="font-bold text-sea hover:text-[#0b615b]"
+                type="button"
+                onClick={handleSignOut}
+              >
+                Sign out
+              </button>
+            </div>
           </div>
         </div>
         {children}

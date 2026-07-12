@@ -7,6 +7,7 @@ create table if not exists public.profiles (
   full_name text,
   username text,
   agency_name text,
+  account_role text not null default 'buyer',
   has_access boolean not null default false,
   stripe_customer_id text,
   stripe_checkout_session_id text,
@@ -14,6 +15,23 @@ create table if not exists public.profiles (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.profiles
+add column if not exists account_role text not null default 'buyer';
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'profiles_account_role_check'
+      and conrelid = 'public.profiles'::regclass
+  ) then
+    alter table public.profiles
+    add constraint profiles_account_role_check
+    check (account_role in ('buyer', 'owner'));
+  end if;
+end $$;
 
 alter table public.profiles enable row level security;
 

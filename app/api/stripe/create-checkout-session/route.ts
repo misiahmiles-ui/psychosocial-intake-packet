@@ -15,6 +15,7 @@ import {
   metadataString,
   updateUserAppMetadata
 } from "@/lib/supabase/accessMetadata";
+import { isOwnerRole } from "@/lib/supabase/ownerRole";
 
 export async function POST(request: Request) {
   if (
@@ -46,9 +47,10 @@ export async function POST(request: Request) {
   const appMetadata = user.app_metadata as Record<string, unknown>;
   const { data: profile, error: profileError } = await admin
     .from("profiles")
-    .select("has_access,stripe_customer_id")
+    .select("account_role,has_access,stripe_customer_id")
     .eq("id", user.id)
     .maybeSingle<{
+      account_role: string | null;
       has_access: boolean;
       stripe_customer_id: string | null;
     }>();
@@ -58,6 +60,10 @@ export async function POST(request: Request) {
       code: profileError.code,
       message: profileError.message
     });
+  }
+
+  if (isOwnerRole({ appMetadata, profileRole: profile?.account_role })) {
+    return NextResponse.json({ url: `${getSiteUrl()}/owner` });
   }
 
   if (profile?.has_access || metadataHasAccess(appMetadata)) {

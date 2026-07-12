@@ -7,9 +7,15 @@ import {
 import {
   metadataHasAccess
 } from "@/lib/supabase/accessMetadata";
+import {
+  isOwnerRole,
+  metadataHasOwnerRole,
+  normalizeAccountRole
+} from "@/lib/supabase/ownerRole";
 
 type ProfileRow = {
   agency_name: string | null;
+  account_role: string | null;
   email: string | null;
   full_name: string | null;
   has_access: boolean;
@@ -43,7 +49,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await admin
     .from("profiles")
-    .select("id,email,full_name,username,agency_name,has_access")
+    .select("id,email,full_name,username,agency_name,account_role,has_access")
     .eq("id", user.id)
     .maybeSingle<ProfileRow>();
 
@@ -61,10 +67,14 @@ export async function GET(request: Request) {
     });
 
     return NextResponse.json({
+      accessRole: metadataHasOwnerRole(appMetadata) ? "owner" : "buyer",
       agencyName: userMetadata.agency_name ?? null,
       email: user.email ?? null,
       fullName: userMetadata.full_name ?? null,
-      hasAccess: metadataHasAccess(appMetadata),
+      hasAccess:
+        metadataHasAccess(appMetadata) ||
+        metadataHasOwnerRole(appMetadata),
+      isOwner: metadataHasOwnerRole(appMetadata),
       username: userMetadata.username ?? null
     });
   }
@@ -75,21 +85,29 @@ export async function GET(request: Request) {
       await admin
         .from("profiles")
         .upsert({
+          account_role: "buyer",
           agency_name: userMetadata.agency_name ?? null,
           email: user.email ?? null,
           full_name: userMetadata.full_name ?? null,
           id: user.id,
           username: userMetadata.username ?? null
         })
-        .select("id,email,full_name,username,agency_name,has_access")
+        .select("id,email,full_name,username,agency_name,account_role,has_access")
         .single<ProfileRow>()
     ).data;
 
+  const owner = isOwnerRole({
+    appMetadata,
+    profileRole: profile?.account_role
+  });
+
   return NextResponse.json({
+    accessRole: owner ? "owner" : normalizeAccountRole(profile?.account_role),
     agencyName: profile?.agency_name ?? null,
     email: profile?.email ?? user.email ?? null,
     fullName: profile?.full_name ?? null,
-    hasAccess: Boolean(profile?.has_access) || metadataHasAccess(appMetadata),
+    hasAccess: owner || Boolean(profile?.has_access) || metadataHasAccess(appMetadata),
+    isOwner: owner,
     username: profile?.username ?? null
   });
 }
