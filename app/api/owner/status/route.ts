@@ -5,7 +5,7 @@ import {
   getBearerToken,
   hasSupabaseAdminConfig
 } from "@/lib/supabase/server";
-import { isOwnerRole } from "@/lib/supabase/ownerRole";
+import { resolveOwnerAuthorization } from "@/lib/supabase/ownerRole";
 
 type OwnerProfileRow = {
   account_role: string | null;
@@ -47,12 +47,19 @@ export async function GET(request: Request) {
     .maybeSingle<OwnerProfileRow>();
 
   const appMetadata = user.app_metadata as Record<string, unknown>;
-  const owner = isOwnerRole({
+  const ownerAuthorization = resolveOwnerAuthorization({
     appMetadata,
     profileRole: profile?.account_role
   });
 
-  if (profileError || !owner) {
+  if (profileError && !ownerAuthorization.isOwner) {
+    console.warn("Owner profile table could not be read.", {
+      code: profileError.code,
+      message: profileError.message
+    });
+  }
+
+  if (!ownerAuthorization.isOwner) {
     return NextResponse.json(
       { error: "Owner access is required." },
       { status: 403 }
@@ -60,7 +67,8 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({
-    accountRole: "owner",
+    accountRole: ownerAuthorization.accountRole,
+    authorizationSource: ownerAuthorization.source,
     deployment: {
       commit:
         process.env.COMMIT_REF ??

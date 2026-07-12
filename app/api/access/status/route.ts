@@ -4,14 +4,8 @@ import {
   getBearerToken,
   hasSupabaseAdminConfig
 } from "@/lib/supabase/server";
-import {
-  metadataHasAccess
-} from "@/lib/supabase/accessMetadata";
-import {
-  isOwnerRole,
-  metadataHasOwnerRole,
-  normalizeAccountRole
-} from "@/lib/supabase/ownerRole";
+import { metadataHasAccess } from "@/lib/supabase/accessMetadata";
+import { resolveOwnerAuthorization } from "@/lib/supabase/ownerRole";
 
 type ProfileRow = {
   agency_name: string | null;
@@ -66,15 +60,21 @@ export async function GET(request: Request) {
       message: error.message
     });
 
+    const ownerAuthorization = resolveOwnerAuthorization({
+      appMetadata,
+      profileRole: null
+    });
+
     return NextResponse.json({
-      accessRole: metadataHasOwnerRole(appMetadata) ? "owner" : "buyer",
+      accessRole: ownerAuthorization.accountRole,
+      authorizationSource: ownerAuthorization.source,
       agencyName: userMetadata.agency_name ?? null,
       email: user.email ?? null,
       fullName: userMetadata.full_name ?? null,
       hasAccess:
         metadataHasAccess(appMetadata) ||
-        metadataHasOwnerRole(appMetadata),
-      isOwner: metadataHasOwnerRole(appMetadata),
+        ownerAuthorization.isOwner,
+      isOwner: ownerAuthorization.isOwner,
       username: userMetadata.username ?? null
     });
   }
@@ -96,18 +96,22 @@ export async function GET(request: Request) {
         .single<ProfileRow>()
     ).data;
 
-  const owner = isOwnerRole({
+  const ownerAuthorization = resolveOwnerAuthorization({
     appMetadata,
     profileRole: profile?.account_role
   });
 
   return NextResponse.json({
-    accessRole: owner ? "owner" : normalizeAccountRole(profile?.account_role),
+    accessRole: ownerAuthorization.accountRole,
+    authorizationSource: ownerAuthorization.source,
     agencyName: profile?.agency_name ?? null,
     email: profile?.email ?? user.email ?? null,
     fullName: profile?.full_name ?? null,
-    hasAccess: owner || Boolean(profile?.has_access) || metadataHasAccess(appMetadata),
-    isOwner: owner,
+    hasAccess:
+      ownerAuthorization.isOwner ||
+      Boolean(profile?.has_access) ||
+      metadataHasAccess(appMetadata),
+    isOwner: ownerAuthorization.isOwner,
     username: profile?.username ?? null
   });
 }

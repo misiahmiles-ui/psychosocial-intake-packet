@@ -23,18 +23,32 @@ const checks = [
     name: "Owner role is verified in a server API route",
     pass:
       fileIncludes("app/api/owner/status/route.ts", "admin.auth.getUser(token)") &&
-      fileIncludes("app/api/owner/status/route.ts", "isOwnerRole")
+      fileIncludes("app/api/owner/status/route.ts", "resolveOwnerAuthorization")
+  },
+  {
+    name: "Dashboard and owner APIs share the same owner authorization function",
+    pass:
+      fileIncludes("app/api/access/status/route.ts", "resolveOwnerAuthorization") &&
+      fileIncludes("app/api/owner/status/route.ts", "resolveOwnerAuthorization") &&
+      fileIncludes("app/api/stripe/create-checkout-session/route.ts", "resolveOwnerAuthorization")
+  },
+  {
+    name: "Owner API does not reject app-metadata owners because of a profile read issue",
+    pass:
+      !fileIncludes("app/api/owner/status/route.ts", "profileError || !owner") &&
+      fileIncludes("app/api/owner/status/route.ts", "profileError && !ownerAuthorization.isOwner")
   },
   {
     name: "Protected access status exposes owner access without changing Stripe",
     pass:
       fileIncludes("app/api/access/status/route.ts", "isOwner") &&
-      fileIncludes("app/api/access/status/route.ts", "owner || Boolean(profile?.has_access)")
+      fileIncludes("app/api/access/status/route.ts", "ownerAuthorization.isOwner") &&
+      fileIncludes("app/api/access/status/route.ts", "Boolean(profile?.has_access)")
   },
   {
     name: "Checkout redirects owners away from Stripe",
     pass:
-      fileIncludes("app/api/stripe/create-checkout-session/route.ts", "isOwnerRole") &&
+      fileIncludes("app/api/stripe/create-checkout-session/route.ts", "resolveOwnerAuthorization") &&
       fileIncludes("app/api/stripe/create-checkout-session/route.ts", "/owner")
   },
   {

@@ -18,6 +18,7 @@ type OwnerStatus =
 
 export type OwnerStatusData = {
   accountRole: "owner";
+  authorizationSource?: "profile" | "app_metadata" | "none";
   deployment: {
     commit: string | null;
     environment: string;

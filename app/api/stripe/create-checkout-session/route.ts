@@ -15,7 +15,7 @@ import {
   metadataString,
   updateUserAppMetadata
 } from "@/lib/supabase/accessMetadata";
-import { isOwnerRole } from "@/lib/supabase/ownerRole";
+import { resolveOwnerAuthorization } from "@/lib/supabase/ownerRole";
 
 export async function POST(request: Request) {
   if (
@@ -62,7 +62,12 @@ export async function POST(request: Request) {
     });
   }
 
-  if (isOwnerRole({ appMetadata, profileRole: profile?.account_role })) {
+  const ownerAuthorization = resolveOwnerAuthorization({
+    appMetadata,
+    profileRole: profile?.account_role
+  });
+
+  if (ownerAuthorization.isOwner) {
     return NextResponse.json({ url: `${getSiteUrl()}/owner` });
   }
 

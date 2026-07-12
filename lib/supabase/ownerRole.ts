@@ -5,6 +5,14 @@ export type AccountRole = "buyer" | "owner";
 export const OWNER_ROLE: AccountRole = "owner";
 export const BUYER_ROLE: AccountRole = "buyer";
 
+type OwnerAuthorizationSource = "profile" | "app_metadata" | "none";
+
+export type OwnerAuthorizationResult = {
+  accountRole: AccountRole;
+  isOwner: boolean;
+  source: OwnerAuthorizationSource;
+};
+
 export function metadataHasOwnerRole(
   metadata: Record<string, unknown> | undefined
 ) {
@@ -22,6 +30,27 @@ export function isOwnerRole({
   appMetadata: Record<string, unknown> | undefined;
   profileRole: unknown;
 }) {
-  return normalizeAccountRole(profileRole) === OWNER_ROLE ||
-    metadataHasOwnerRole(appMetadata);
+  return resolveOwnerAuthorization({ appMetadata, profileRole }).isOwner;
+}
+
+export function resolveOwnerAuthorization({
+  appMetadata,
+  profileRole
+}: {
+  appMetadata: Record<string, unknown> | undefined;
+  profileRole: unknown;
+}): OwnerAuthorizationResult {
+  const profileIsOwner = normalizeAccountRole(profileRole) === OWNER_ROLE;
+  const metadataIsOwner = metadataHasOwnerRole(appMetadata);
+  const isOwner = profileIsOwner || metadataIsOwner;
+
+  return {
+    accountRole: isOwner ? OWNER_ROLE : BUYER_ROLE,
+    isOwner,
+    source: profileIsOwner
+      ? "profile"
+      : metadataIsOwner
+        ? "app_metadata"
+        : "none"
+  };
 }
