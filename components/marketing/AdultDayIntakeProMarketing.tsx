@@ -39,7 +39,7 @@ const packageBoundaries = [
   "Custom agency deployment is not included unless separately purchased.",
   "Permanent built-in agency branding is not included in the standard hosted version.",
   "Custom consent rewriting or custom intake-section development is not included.",
-  "Multiple staff seats, custom user roles, and staff permission levels are not included unless separately configured.",
+  "Custom user roles and staff permission levels are not included unless separately configured.",
   "HIPAA certification, BAA review, legal review, and compliance review remain the agency's responsibility unless separately agreed in writing.",
   "Dedicated agency-owned hosting and long-term custom maintenance are not included unless separately purchased."
 ];
@@ -191,42 +191,57 @@ export function AdultDayIntakeProMarketing() {
 
       <section id="standard-agency-access" className="border-y border-[#eadad2] bg-[#f7f3e9]">
         <div className="mx-auto max-w-7xl px-5 py-14 sm:px-8 lg:px-10">
-          <div className="grid gap-8 lg:grid-cols-[0.85fr_1.15fr]">
-            <div>
-              <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#45613a]">
-                What Standard Agency Access Includes
-              </p>
-              <h2 className="mt-3 text-3xl font-bold tracking-normal text-[#174f80]">
-                $487 upfront access fee + $19/month hosted access and maintenance
-              </h2>
-              <p className="mt-4 leading-7 text-[#435665]">
-                Standard Agency Access gives one adult day care or adult medical
-                daycare program access to the hosted digital psychosocial intake
-                workflow.
-              </p>
-              <p className="mt-4 leading-7 text-[#435665]">
-                The $487 upfront access fee activates the agency's access to the
-                standard hosted workflow. The $19/month subscription covers
-                continued hosted access and standard maintenance for the hosted
-                version. Continued hosted access depends on an active monthly
-                subscription and the active availability of the hosted site.
-              </p>
-              <Link
-                href="/signup"
-                className="mt-6 inline-flex min-h-12 items-center gap-2 rounded-lg bg-[#2f6798] px-5 py-3 font-bold text-white shadow-soft transition hover:bg-[#245279]"
-              >
-                Purchase Standard Agency Access
-                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+          <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#45613a]">
+            Choose the right workflow
+          </p>
+          <h2 className="mt-3 text-3xl font-bold tracking-normal text-[#174f80]">
+            Three purchasing choices
+          </h2>
+          <div className="mt-8 grid gap-5 lg:grid-cols-3">
+            <article className="rounded-xl border border-[#eadad2] bg-white p-6">
+              <h3 className="text-xl font-bold">Psychosocial Intake</h3>
+              <p className="mt-3 text-3xl font-bold">$487 <span className="text-base font-semibold">upfront</span></p>
+              <p className="mt-1 font-semibold">+ $19/month</p>
+              <p className="mt-4 text-sm leading-6 text-[#435665]">Includes one named Psychosocial workflow seat.</p>
+              <p className="mt-2 text-sm font-semibold text-[#435665]">Additional Psychosocial seats: $9/month each.</p>
+              <Link href="/signup" className="mt-5 inline-flex font-bold text-[#174f80]">
+                Request Psychosocial Access <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
               </Link>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {includes.map((item) => (
-                <div key={item} className="rounded-lg border border-[#eadad2] bg-white p-4">
-                  <ClipboardCheck className="h-5 w-5 text-[#c85f75]" aria-hidden="true" />
-                  <p className="mt-3 font-semibold text-[#273d4e]">{item}</p>
-                </div>
-              ))}
-            </div>
+            </article>
+            <article className="rounded-xl border border-[#eadad2] bg-white p-6">
+              <h3 className="text-xl font-bold">Nursing Intake</h3>
+              <p className="mt-3 text-3xl font-bold">$487 <span className="text-base font-semibold">upfront</span></p>
+              <p className="mt-1 font-semibold">+ $19/month</p>
+              <p className="mt-4 text-sm leading-6 text-[#435665]">Includes one named Nursing workflow seat.</p>
+              <p className="mt-2 text-sm font-semibold text-[#435665]">Additional Nursing seats: $9/month each.</p>
+              <a href="https://adult-day-nursing-intake-pro.vercel.app/" className="mt-5 inline-flex font-bold text-[#174f80]">
+                View Nursing Intake <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
+              </a>
+            </article>
+            <article className="rounded-xl border-2 border-[#45613a] bg-[#eef8f4] p-6 shadow-sm">
+              <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#45613a]">Best Value</p>
+              <h3 className="mt-2 text-xl font-bold">Adult Day Complete Intake Suite™</h3>
+              <p className="mt-3 text-3xl font-bold">$797 <span className="text-base font-semibold">upfront</span></p>
+              <p className="mt-1 font-semibold">+ $29/month</p>
+              <p className="mt-3 text-sm font-bold text-[#45613a]">Save $285 in the first year.</p>
+              <p className="mt-3 text-sm leading-6 text-[#435665]">Includes one Psychosocial workflow seat and one Nursing workflow seat. Assign them to two employees or both to one employee using one login.</p>
+              <p className="mt-2 text-sm font-semibold text-[#435665]">Additional Suite seats: $7/month per Psychosocial or Nursing workflow assignment; both workflows for one additional employee cost $14/month.</p>
+              <p className="mt-2 text-sm text-[#435665]">No additional upfront charge for seats.</p>
+              <p className="mt-5 font-bold text-[#174f80]">Request Suite Access (coming soon)</p>
+            </article>
+          </div>
+          <div className="mt-8 rounded-xl border border-[#d7ded4] bg-white p-5 text-sm leading-6 text-[#435665]">
+            <p><strong>Separately:</strong> $974 upfront plus $38/month. <strong>Suite first-year savings:</strong> $285.</p>
+            <p className="mt-2">Existing single-product customers may upgrade for $310 upfront; the monthly base becomes $29 plus applicable additional seats.</p>
+            <p className="mt-2">One license covers one physical facility. Ten or more seats or multiple locations: contact us for organizational pricing. Named employees must use individual accounts and must not share passwords.</p>
+          </div>
+          <div className="mt-8 grid gap-3 sm:grid-cols-2">
+            {includes.map((item) => (
+              <div key={item} className="rounded-lg border border-[#eadad2] bg-white p-4">
+                <ClipboardCheck className="h-5 w-5 text-[#c85f75]" aria-hidden="true" />
+                <p className="mt-3 font-semibold text-[#273d4e]">{item}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
