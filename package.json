@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "test:owner": "node scripts/owner-access-check.mjs",
+    "test:shared-suite": "node scripts/shared-suite-access-check.mts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

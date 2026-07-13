@@ -8,17 +8,32 @@ import {
   createSupabaseBrowserClient,
   hasSupabaseBrowserConfig
 } from "@/lib/supabase/browser";
+import type {
+  SubscriptionPlan,
+  WorkflowAccess,
+  WorkflowProduct
+} from "@/lib/access/sharedSuiteRules";
+
+const CURRENT_PRODUCT: WorkflowProduct = "psychosocial";
+
+export type ActiveAccessDetails = {
+  email: string | null;
+  isOwner: boolean;
+  organizationName: string | null;
+  subscriptionPlan: SubscriptionPlan | null;
+  workflowAccess: WorkflowAccess;
+};
 
 type AccessStatus =
   | { state: "loading" }
   | { state: "signed-out" }
   | { state: "needs-payment"; email: string | null }
-  | { state: "active"; email: string | null; isOwner: boolean }
+  | ({ state: "active" } & ActiveAccessDetails)
   | { state: "setup-missing" }
   | { state: "error"; message: string };
 
 type ProtectedAccessProps = {
-  children: ReactNode;
+  children: ReactNode | ((access: ActiveAccessDetails) => ReactNode);
 };
 
 export function ProtectedAccess({ children }: ProtectedAccessProps) {
@@ -78,11 +93,26 @@ export function ProtectedAccess({ children }: ProtectedAccessProps) {
       hasAccess: boolean;
       email: string | null;
       isOwner?: boolean;
+      organizationName?: string | null;
+      subscriptionPlan?: SubscriptionPlan | null;
+      workflowAccess?: WorkflowAccess;
+    };
+
+    const workflowAccess = data.workflowAccess ?? {
+      nursing: CURRENT_PRODUCT === "nursing" && data.hasAccess,
+      psychosocial: CURRENT_PRODUCT === "psychosocial" && data.hasAccess
     };
 
     setStatus(
       data.hasAccess
-        ? { state: "active", email: data.email, isOwner: data.isOwner === true }
+        ? {
+            state: "active",
+            email: data.email,
+            isOwner: data.isOwner === true,
+            organizationName: data.organizationName ?? null,
+            subscriptionPlan: data.subscriptionPlan ?? null,
+            workflowAccess
+          }
         : { state: "needs-payment", email: data.email }
     );
   }, [supabase]);
@@ -171,7 +201,7 @@ export function ProtectedAccess({ children }: ProtectedAccessProps) {
             </div>
           </div>
         </div>
-        {children}
+        {typeof children === "function" ? children(status) : children}
       </>
     );
   }

@@ -6,6 +6,16 @@ import {
 } from "@/lib/supabase/server";
 import { metadataHasAccess } from "@/lib/supabase/accessMetadata";
 import { resolveOwnerAuthorization } from "@/lib/supabase/ownerRole";
+import {
+  getSharedSuiteAccess,
+  hasSharedSuiteAccessEnabled
+} from "@/lib/supabase/sharedSuiteAccess";
+import type {
+  WorkflowAccess,
+  WorkflowProduct
+} from "@/lib/access/sharedSuiteRules";
+
+const CURRENT_PRODUCT: WorkflowProduct = "psychosocial";
 
 type ProfileRow = {
   agency_name: string | null;
@@ -54,64 +64,86 @@ export async function GET(request: Request) {
     username?: string;
   };
 
+  let profile = data;
+
   if (error) {
     console.warn("Buyer profile table could not be read.", {
       code: error.code,
       message: error.message
     });
+  } else if (!profile) {
+    const { data: createdProfile, error: profileCreateError } = await admin
+      .from("profiles")
+      .upsert({
+        account_role: "buyer",
+        agency_name: userMetadata.agency_name ?? null,
+        email: user.email ?? null,
+        full_name: userMetadata.full_name ?? null,
+        id: user.id,
+        username: userMetadata.username ?? null
+      })
+      .select("id,email,full_name,username,agency_name,account_role,has_access")
+      .single<ProfileRow>();
 
-    const ownerAuthorization = resolveOwnerAuthorization({
-      appMetadata,
-      profileRole: null
-    });
+    if (profileCreateError) {
+      console.warn("Buyer profile table could not be created.", {
+        code: profileCreateError.code,
+        message: profileCreateError.message
+      });
+    }
 
-    return NextResponse.json({
-      accessRole: ownerAuthorization.accountRole,
-      authorizationSource: ownerAuthorization.source,
-      agencyName: userMetadata.agency_name ?? null,
-      email: user.email ?? null,
-      fullName: userMetadata.full_name ?? null,
-      hasAccess:
-        metadataHasAccess(appMetadata) ||
-        ownerAuthorization.isOwner,
-      isOwner: ownerAuthorization.isOwner,
-      username: userMetadata.username ?? null
-    });
+    profile = createdProfile;
   }
-
-  const profile =
-    data ??
-    (
-      await admin
-        .from("profiles")
-        .upsert({
-          account_role: "buyer",
-          agency_name: userMetadata.agency_name ?? null,
-          email: user.email ?? null,
-          full_name: userMetadata.full_name ?? null,
-          id: user.id,
-          username: userMetadata.username ?? null
-        })
-        .select("id,email,full_name,username,agency_name,account_role,has_access")
-        .single<ProfileRow>()
-    ).data;
 
   const ownerAuthorization = resolveOwnerAuthorization({
     appMetadata,
     profileRole: profile?.account_role
   });
 
+  let sharedAccess: Awaited<ReturnType<typeof getSharedSuiteAccess>> | null =
+    null;
+
+  if (hasSharedSuiteAccessEnabled() && !ownerAuthorization.isOwner) {
+    try {
+      sharedAccess = await getSharedSuiteAccess(admin, user.id);
+    } catch (sharedAccessError) {
+      console.error("Shared facility access could not be checked.", sharedAccessError);
+      return NextResponse.json(
+        { error: "Shared facility access could not be checked." },
+        { status: 503 }
+      );
+    }
+  }
+
+  const legacyHasAccess =
+    Boolean(profile?.has_access) || metadataHasAccess(appMetadata);
+  const workflowAccess: WorkflowAccess = ownerAuthorization.isOwner
+    ? { nursing: true, psychosocial: true }
+    : sharedAccess?.workflowAccess ?? legacyWorkflowAccess(legacyHasAccess);
+
   return NextResponse.json({
     accessRole: ownerAuthorization.accountRole,
-    authorizationSource: ownerAuthorization.source,
+    authorizationSource: sharedAccess
+      ? "shared_facility_membership"
+      : ownerAuthorization.source,
     agencyName: profile?.agency_name ?? null,
     email: profile?.email ?? user.email ?? null,
-    fullName: profile?.full_name ?? null,
-    hasAccess:
-      ownerAuthorization.isOwner ||
-      Boolean(profile?.has_access) ||
-      metadataHasAccess(appMetadata),
+    fullName: profile?.full_name ?? userMetadata.full_name ?? null,
+    hasAccess: ownerAuthorization.isOwner || workflowAccess[CURRENT_PRODUCT],
     isOwner: ownerAuthorization.isOwner,
-    username: profile?.username ?? null
+    organizationId: sharedAccess?.organizationId ?? null,
+    organizationName: sharedAccess?.organizationName ?? null,
+    organizationRole: sharedAccess?.organizationRole ?? null,
+    seatLimits: sharedAccess?.seatLimits ?? null,
+    subscriptionPlan: sharedAccess?.subscriptionPlan ?? null,
+    username: profile?.username ?? userMetadata.username ?? null,
+    workflowAccess
   });
+}
+
+function legacyWorkflowAccess(hasAccess: boolean): WorkflowAccess {
+  return {
+    nursing: CURRENT_PRODUCT === "nursing" && hasAccess,
+    psychosocial: CURRENT_PRODUCT === "psychosocial" && hasAccess
+  };
 }

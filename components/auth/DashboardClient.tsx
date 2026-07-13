@@ -2,16 +2,34 @@
 
 import Link from "next/link";
 import { ArrowRight, ClipboardList, FileText, ShieldCheck } from "lucide-react";
-import { ProtectedAccess } from "@/components/auth/ProtectedAccess";
+import {
+  ProtectedAccess,
+  type ActiveAccessDetails
+} from "@/components/auth/ProtectedAccess";
+
+const NURSING_DASHBOARD_URL =
+  "https://adult-day-nursing-intake-pro.vercel.app/dashboard";
 
 export function DashboardClient() {
   return (
     <ProtectedAccess>
+      {(access) => <DashboardContent access={access} />}
+    </ProtectedAccess>
+  );
+}
+
+function DashboardContent({ access }: { access: ActiveAccessDetails }) {
+  const hasBothWorkflows =
+    access.workflowAccess.psychosocial && access.workflowAccess.nursing;
+
+  return (
       <main className="min-h-screen bg-cloud text-ink">
         <section className="border-b border-[#d7dfdc] bg-linen">
           <div className="mx-auto max-w-7xl px-5 py-10 sm:px-8 lg:px-10">
             <p className="text-sm font-bold uppercase tracking-[0.18em] text-sea">
-              Standard Agency Access
+              {access.subscriptionPlan === "complete_suite"
+                ? "Complete Suite Access"
+                : "Facility Workflow Access"}
             </p>
             <h1 className="mt-3 text-4xl font-bold tracking-normal">
               Adult Day Intake Pro™ Dashboard
@@ -21,20 +39,38 @@ export function DashboardClient() {
               documentation workflow does not save client/member assessment
               data to Supabase or Netlify.
             </p>
+            {access.organizationName ? (
+              <p className="mt-2 font-semibold text-[#52645f]">
+                Facility: {access.organizationName}
+              </p>
+            ) : null}
             <div className="mt-7 flex flex-wrap gap-3">
-              <Link
-                className="inline-flex min-h-12 items-center gap-2 rounded-lg bg-sea px-5 py-3 font-bold text-white shadow-soft transition hover:bg-[#0b615b]"
-                href="/intake"
-              >
-                Start New Intake Workflow
-                <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </Link>
-              <Link
-                className="inline-flex min-h-12 items-center rounded-lg border border-[#b9c7c3] bg-white px-5 py-3 font-bold text-ink transition hover:border-sea"
-                href="/example"
-              >
-                View Example
-              </Link>
+              {access.workflowAccess.psychosocial ? (
+                <>
+                  <Link
+                    className="inline-flex min-h-12 items-center gap-2 rounded-lg bg-sea px-5 py-3 font-bold text-white shadow-soft transition hover:bg-[#0b615b]"
+                    href="/intake"
+                  >
+                    Start Psychosocial Intake
+                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  </Link>
+                  <Link
+                    className="inline-flex min-h-12 items-center rounded-lg border border-[#b9c7c3] bg-white px-5 py-3 font-bold text-ink transition hover:border-sea"
+                    href="/example"
+                  >
+                    View Psychosocial Example
+                  </Link>
+                </>
+              ) : null}
+              {access.workflowAccess.nursing ? (
+                <a
+                  className="inline-flex min-h-12 items-center gap-2 rounded-lg border border-[#b9c7c3] bg-white px-5 py-3 font-bold text-ink transition hover:border-sea"
+                  href={NURSING_DASHBOARD_URL}
+                >
+                  Open Nursing Workflow
+                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                </a>
+              ) : null}
               <Link
                 className="inline-flex min-h-12 items-center rounded-lg border border-[#b9c7c3] bg-white px-5 py-3 font-bold text-ink transition hover:border-sea"
                 href="/psychosocial-intake-packet"
@@ -42,6 +78,13 @@ export function DashboardClient() {
                 View Product Page
               </Link>
             </div>
+            {hasBothWorkflows ? (
+              <p className="mt-4 text-sm font-semibold text-[#52645f]">
+                The two products currently use separate web domains, so the
+                other workflow may ask you to sign in again with the same staff
+                account.
+              </p>
+            ) : null}
           </div>
         </section>
 
@@ -72,6 +115,5 @@ export function DashboardClient() {
           </article>
         </section>
       </main>
-    </ProtectedAccess>
   );
 }
