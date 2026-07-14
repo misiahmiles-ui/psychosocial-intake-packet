@@ -118,7 +118,7 @@ function MentalStatusReview({ packet }: { packet: IntakePacket }) {
           Total incorrect / unable-refused: {score.missed} of 10
         </p>
         <p className="text-sm font-semibold text-[#334642]">
-          Screening level: {score.level}
+          Screening result: {score.level}
         </p>
       </div>
       {packet.mentalStatus.responses.map((response, index) => (

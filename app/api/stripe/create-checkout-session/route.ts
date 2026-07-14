@@ -20,6 +20,7 @@ import {
   assertPsychosocialPurchaseAllowed,
   SharedAccessConflictError
 } from "@/lib/supabase/sharedAccessSync";
+import { hasCurrentLegalAcceptance } from "@/lib/legal/acceptance";
 
 export async function POST(request: Request) {
   if (
@@ -74,6 +75,24 @@ export async function POST(request: Request) {
 
   if (ownerAuthorization.isOwner) {
     return NextResponse.json({ url: `${getSiteUrl()}/owner` });
+  }
+
+  try {
+    if (!(await hasCurrentLegalAcceptance(admin, user.id))) {
+      return NextResponse.json(
+        {
+          acceptanceUrl: "/legal/accept",
+          error: "Review and accept the current Terms and Privacy Policy before checkout."
+        },
+        { status: 428 }
+      );
+    }
+  } catch (legalError) {
+    console.error("Checkout legal acceptance verification failed.", legalError);
+    return NextResponse.json(
+      { error: "Legal acceptance could not be verified." },
+      { status: 503 }
+    );
   }
 
   if (profile?.has_access || metadataHasAccess(appMetadata)) {

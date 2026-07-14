@@ -53,7 +53,7 @@ export function MentalStatusScreening({ step }: { step: IntakeStep }) {
           Total incorrect / unable-refused: {score.missed} of 10
         </p>
         <p className="mt-1 text-sm font-semibold text-[#334642]">
-          Screening level: {score.level}
+          Screening result: {score.level}
         </p>
       </div>
 
@@ -106,8 +106,10 @@ export function MentalStatusScreening({ step }: { step: IntakeStep }) {
           {...register("mentalStatus.screeningNote" as never)}
         />
         <span>
-          I understand this screen is a screening aid only and is not a
-          standalone diagnosis.
+          I understand this automated result is a screening summary only. It
+          does not diagnose cognitive impairment, determine decision-making
+          capacity, establish New Jersey program eligibility, or replace
+          qualified professional assessment and follow-up.
         </span>
       </label>
     </section>

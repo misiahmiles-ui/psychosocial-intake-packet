@@ -355,7 +355,7 @@ export const INTAKE_STEPS: IntakeStep[] = [
     shortTitle: "Screening",
     eyebrow: "Step 12",
     description:
-      "Interactive Modified Kahn-style screening with automatic scoring. This is a screening aid, not a standalone diagnosis.",
+      "Adapted Kahn-style orientation and memory screen with an automatic error-count summary. This is a screening aid, not a diagnosis, capacity determination, or New Jersey eligibility determination.",
     custom: "mental-status"
   },
   {

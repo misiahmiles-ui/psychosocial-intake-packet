@@ -31,13 +31,13 @@ export function scoreMentalStatus(packet: IntakePacket) {
     (response) => response.status === "incorrect" || response.status === "unable"
   ).length;
 
-  let level = "No impairment";
+  let level = "No or minimal screening concern";
   if (missed >= 9) {
-    level = "Severe impairment";
+    level = "Severe screening concern";
   } else if (missed >= 6) {
-    level = "Moderate impairment";
+    level = "Moderate screening concern";
   } else if (missed >= 3) {
-    level = "Mild impairment";
+    level = "Mild screening concern";
   }
 
   return {

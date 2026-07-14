@@ -14,6 +14,7 @@ import type {
   WorkflowAccess,
   WorkflowProduct
 } from "@/lib/access/sharedSuiteRules";
+import { hasCurrentLegalAcceptance } from "@/lib/legal/acceptance";
 
 const CURRENT_PRODUCT: WorkflowProduct = "psychosocial";
 
@@ -99,6 +100,27 @@ export async function GET(request: Request) {
     appMetadata,
     profileRole: profile?.account_role
   });
+
+  if (!ownerAuthorization.isOwner) {
+    try {
+      const legalAccepted = await hasCurrentLegalAcceptance(admin, user.id);
+      if (!legalAccepted) {
+        return NextResponse.json({
+          email: profile?.email ?? user.email ?? null,
+          hasAccess: false,
+          isOwner: false,
+          requiresLegalAcceptance: true,
+          workflowAccess: { nursing: false, psychosocial: false }
+        });
+      }
+    } catch (legalError) {
+      console.error("Legal acceptance could not be verified.", legalError);
+      return NextResponse.json(
+        { error: "Legal acceptance could not be verified." },
+        { status: 503 }
+      );
+    }
+  }
 
   let sharedAccess: Awaited<ReturnType<typeof getSharedSuiteAccess>> | null =
     null;

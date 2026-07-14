@@ -29,6 +29,7 @@ type AccessStatus =
   | { state: "loading" }
   | { state: "signed-out" }
   | { state: "needs-payment"; email: string | null }
+  | { state: "needs-legal-acceptance"; email: string | null }
   | ({ state: "active" } & ActiveAccessDetails)
   | { state: "setup-missing" }
   | { state: "error"; message: string };
@@ -98,7 +99,16 @@ export function ProtectedAccess({ children }: ProtectedAccessProps) {
       organizationRole?: "facility_admin" | "staff" | null;
       subscriptionPlan?: SubscriptionPlan | null;
       workflowAccess?: WorkflowAccess;
+      requiresLegalAcceptance?: boolean;
     };
+
+    if (data.requiresLegalAcceptance === true) {
+      setStatus({
+        state: "needs-legal-acceptance",
+        email: data.email
+      });
+      return;
+    }
 
     const workflowAccess = data.workflowAccess ?? {
       nursing: CURRENT_PRODUCT === "nursing" && data.hasAccess,
@@ -288,6 +298,24 @@ export function ProtectedAccess({ children }: ProtectedAccessProps) {
                   ? "Opening checkout..."
                   : "Purchase Standard Agency Access"}
               </button>
+            </div>
+          ) : null}
+
+          {status.state === "needs-legal-acceptance" ? (
+            <div className="mt-5 rounded-lg border border-[#cde7df] bg-mint p-5">
+              <h2 className="font-bold text-sea">
+                Review the current Terms and Privacy Policy
+              </h2>
+              <p className="mt-2 text-sm font-semibold leading-6 text-[#334642]">
+                One acceptance applies to the Psychosocial, Nursing, and
+                Complete Suite workflows associated with this staff account.
+              </p>
+              <Link
+                className="mt-4 inline-flex min-h-12 items-center justify-center rounded-lg bg-sea px-5 py-3 font-bold text-white shadow-soft transition hover:bg-[#0b615b]"
+                href="/legal/accept"
+              >
+                Review and accept
+              </Link>
             </div>
           ) : null}
 

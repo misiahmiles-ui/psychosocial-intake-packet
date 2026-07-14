@@ -8,11 +8,13 @@ import {
   createAccountOrganization,
   rollbackAccountSignup
 } from "@/lib/supabase/sharedAccessSync";
+import { recordCurrentLegalAcceptance } from "@/lib/legal/acceptance";
 
 type SignupPayload = {
   agencyName?: unknown;
   email?: unknown;
   fullName?: unknown;
+  legalAccepted?: unknown;
   password?: unknown;
   username?: unknown;
 };
@@ -31,6 +33,13 @@ export async function POST(request: Request) {
   const fullName = cleanValue(payload?.fullName);
   const username = cleanValue(payload?.username);
   const agencyName = cleanValue(payload?.agencyName);
+
+  if (payload?.legalAccepted !== true) {
+    return NextResponse.json(
+      { error: "Accept the Terms and acknowledge the Privacy Policy." },
+      { status: 400 }
+    );
+  }
 
   if (!email || !email.includes("@")) {
     return NextResponse.json(
@@ -102,6 +111,11 @@ export async function POST(request: Request) {
 
       await createAccountOrganization(admin, {
         facilityName: agencyName,
+        userId: data.user.id
+      });
+      await recordCurrentLegalAcceptance(admin, {
+        context: "facility_signup",
+        sourceApp: "psychosocial",
         userId: data.user.id
       });
     } catch (sharedAccessError) {

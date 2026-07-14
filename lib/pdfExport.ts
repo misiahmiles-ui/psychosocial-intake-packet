@@ -163,12 +163,12 @@ function drawMentalStatus(context: PdfContext) {
   const score = scoreMentalStatus(context.packet);
   drawScoringSummary(context, [
     `Total score: ${score.missed} of 10 incorrect / unable-refused`,
-    `Impairment level: ${score.level}`,
+    `Screening result: ${score.level}`,
     `Scoring interpretation: ${scoringInterpretation(score.level)}`
   ]);
   drawText(
     context,
-    "Screening aid only. This score is not a standalone diagnosis.",
+    "Screening summary only. This result does not diagnose cognitive impairment, determine capacity, establish New Jersey program eligibility, or replace qualified professional assessment and follow-up.",
     9,
     false,
     10
@@ -440,11 +440,11 @@ function optionLabel(field: FieldDefinition, value: string) {
 }
 
 function scoringInterpretation(level: string) {
-  if (level === "No impairment") {
-    return "No impairment indicated based on selected responses.";
+  if (level === "No or minimal screening concern") {
+    return "No or minimal errors identified on this screening based on selected responses.";
   }
 
-  return `${level} indicated based on selected responses.`;
+  return `${level} based on selected responses; qualified professional review is required.`;
 }
 
 function drawFieldLine(

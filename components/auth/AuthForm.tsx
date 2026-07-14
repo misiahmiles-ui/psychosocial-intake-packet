@@ -27,6 +27,7 @@ export function AuthForm({ mode }: AuthFormProps) {
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
   const [agencyName, setAgencyName] = useState("");
+  const [legalAccepted, setLegalAccepted] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -48,6 +49,7 @@ export function AuthForm({ mode }: AuthFormProps) {
             agencyName,
             email,
             fullName,
+            legalAccepted,
             password,
             username
           }),
@@ -178,6 +180,29 @@ export function AuthForm({ mode }: AuthFormProps) {
             required
           />
         </label>
+
+        {mode === "signup" ? (
+          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-[#d7dfdc] bg-[#fbfcfb] p-4 text-sm leading-6 text-[#435665]">
+            <input
+              checked={legalAccepted}
+              className="mt-1 h-5 w-5 shrink-0 accent-[#137d78]"
+              onChange={(event) => setLegalAccepted(event.target.checked)}
+              required
+              type="checkbox"
+            />
+            <span>
+              I am authorized to create this facility account, agree to the{" "}
+              <Link className="font-bold text-sea underline" href="/terms" target="_blank">
+                Terms of Service
+              </Link>
+              , and acknowledge the{" "}
+              <Link className="font-bold text-sea underline" href="/privacy" target="_blank">
+                Privacy Policy
+              </Link>
+              .
+            </span>
+          </label>
+        ) : null}
         <label className="field-label">
           <span className="flex items-center justify-between gap-3">
             <span>Password</span>
@@ -211,7 +236,11 @@ export function AuthForm({ mode }: AuthFormProps) {
         <button
           className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-sea px-5 py-3 font-bold text-white shadow-soft transition hover:bg-[#0b615b] disabled:cursor-not-allowed disabled:opacity-60"
           type="submit"
-          disabled={isSubmitting || !supabaseConfigured}
+          disabled={
+            isSubmitting ||
+            !supabaseConfigured ||
+            (mode === "signup" && !legalAccepted)
+          }
         >
           {isSubmitting
             ? "Working..."

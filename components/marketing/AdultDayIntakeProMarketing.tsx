@@ -87,6 +87,12 @@ export function AdultDayIntakeProMarketing() {
             <Link className="text-[#45613a] hover:text-[#2f4528]" href="/example">
               Example
             </Link>
+            <Link className="text-[#45613a] hover:text-[#2f4528]" href="/terms">
+              Terms
+            </Link>
+            <Link className="text-[#45613a] hover:text-[#2f4528]" href="/privacy">
+              Privacy
+            </Link>
           </div>
         </div>
       </nav>
