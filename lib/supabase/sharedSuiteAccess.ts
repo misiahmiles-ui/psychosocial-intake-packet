@@ -51,10 +51,16 @@ export async function getSharedSuiteAccess(
     .eq("user_id", userId)
     .eq("status", "active")
     .order("created_at", { ascending: true })
-    .limit(1);
+    .limit(2);
 
   if (membershipError) {
     throw new Error(`Shared membership lookup failed: ${membershipError.message}`);
+  }
+
+  if ((memberships?.length ?? 0) > 1) {
+    throw new Error(
+      "Shared membership lookup failed: the account belongs to more than one facility."
+    );
   }
 
   const membership = (memberships?.[0] ?? null) as MembershipRow | null;
@@ -104,10 +110,12 @@ export async function getSharedSuiteAccess(
     subscription?.status ?? null
   );
   const seatLimits: WorkflowSeatLimits = { nursing: 0, psychosocial: 0 };
+  const activeProducts = new Set<WorkflowProduct>();
 
   for (const entitlement of entitlements) {
     if (entitlement.status === "active" && subscriptionIsActive) {
       seatLimits[entitlement.product_code] = entitlement.seat_limit;
+      activeProducts.add(entitlement.product_code);
     }
   }
 
@@ -118,10 +126,12 @@ export async function getSharedSuiteAccess(
     seatLimits,
     subscriptionPlan: subscription?.plan_code ?? null,
     workflowAccess: resolveWorkflowAccess({
-      assignments: assignments.map((assignment) => ({
-        productCode: assignment.product_code,
-        userId: assignment.user_id
-      })),
+      assignments: assignments
+        .filter((assignment) => activeProducts.has(assignment.product_code))
+        .map((assignment) => ({
+          productCode: assignment.product_code,
+          userId: assignment.user_id
+        })),
       isProductOwner: false,
       subscriptionStatus: subscription?.status ?? null,
       userId

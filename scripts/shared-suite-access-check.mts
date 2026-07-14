@@ -6,8 +6,89 @@ import {
   resolveWorkflowAccess,
   type WorkflowSeatAssignment
 } from "../lib/access/sharedSuiteRules.ts";
+import {
+  assertCustomerSeatEligible,
+  buildPsychosocialPurchaseRecords
+} from "../lib/access/sharedAccountProvisioning.ts";
+import {
+  assertPsychosocialCheckoutAuthority,
+  assertPsychosocialSubscriptionAuthority
+} from "../lib/stripe/psychosocialCheckoutAuthority.ts";
 
 const tests = [
+  {
+    name: "Legitimate Psychosocial purchase prepares only its facility access records",
+    run() {
+      const records = buildPsychosocialPurchaseRecords({
+        checkoutSessionId: "cs_test_approved",
+        organizationId: "organization-1",
+        stripeSubscriptionId: "sub_test_approved",
+        subscriptionStatus: "active",
+        upfrontPaidAt: "2026-07-13T00:00:00.000Z",
+        userId: "buyer-1"
+      });
+
+      assert.equal(records.subscription.plan_code, "psychosocial");
+      assert.equal(records.entitlement.product_code, "psychosocial");
+      assert.equal(records.entitlement.included_seats, 1);
+      assert.equal(records.assignment.product_code, "psychosocial");
+      assert.equal(records.assignment.user_id, "buyer-1");
+      assert.equal(JSON.stringify(records).includes("nursing"), false);
+
+      assertPsychosocialCheckoutAuthority({
+        clientReferenceId: "buyer-1",
+        expectedMonthlyPriceId: "price_monthly",
+        expectedUpfrontPriceId: "price_upfront",
+        lineItems: [
+          { priceId: "price_upfront", quantity: 1 },
+          { priceId: "price_monthly", quantity: 1 }
+        ],
+        sessionCustomerId: "cus_approved",
+        sessionMetadata: approvedMetadata("buyer-1"),
+        subscriptionCustomerId: "cus_approved",
+        subscriptionMetadata: approvedMetadata("buyer-1"),
+        userId: "buyer-1"
+      });
+
+      assertPsychosocialSubscriptionAuthority({
+        customerId: "cus_approved",
+        expectedMonthlyPriceId: "price_monthly",
+        items: [{ priceId: "price_monthly", quantity: 1 }],
+        metadata: approvedMetadata("buyer-1"),
+        userId: "buyer-1"
+      });
+    }
+  },
+  {
+    name: "Unapproved Stripe prices and product-owner seat provisioning fail closed",
+    run() {
+      assert.throws(() =>
+        assertCustomerSeatEligible({ profileRole: "owner" })
+      );
+      assert.throws(() =>
+        assertCustomerSeatEligible({
+          appMetadata: { owner_access: true },
+          profileRole: "buyer"
+        })
+      );
+      assert.throws(() =>
+        assertPsychosocialCheckoutAuthority({
+          clientReferenceId: "buyer-1",
+          expectedMonthlyPriceId: "price_monthly",
+          expectedUpfrontPriceId: "price_upfront",
+          lineItems: [
+            { priceId: "price_wrong", quantity: 1 },
+            { priceId: "price_monthly", quantity: 1 }
+          ],
+          sessionCustomerId: "cus_approved",
+          sessionMetadata: approvedMetadata("buyer-1"),
+          subscriptionCustomerId: "cus_approved",
+          subscriptionMetadata: approvedMetadata("buyer-1"),
+          userId: "buyer-1"
+        })
+      );
+    }
+  },
   {
     name: "Psychosocial-only access",
     run() {
@@ -124,12 +205,34 @@ const tests = [
     }
   },
   {
+    name: "Shared database functions are hardened without granting access",
+    run() {
+      const hardeningPath =
+        "supabase/migrations/20260713_shared_access_security_hardening.sql";
+      assert.equal(existsSync(hardeningPath), true);
+      const hardening = readFileSync(hardeningPath, "utf8").toLowerCase();
+      assert.match(hardening, /set search_path = pg_catalog/);
+      assert.match(hardening, /handle_new_user_profile/);
+      assert.match(hardening, /rls_auto_enable/);
+      assert.match(hardening, /from public, anon, authenticated/);
+      assert.doesNotMatch(hardening, /insert into/);
+      assert.doesNotMatch(hardening, /update public\./);
+    }
+  },
+  {
     name: "Account and billing preparation excludes intake information",
     run() {
       const sourcePaths = [
         "lib/access/sharedSuiteRules.ts",
+        "lib/access/sharedAccountProvisioning.ts",
+        "lib/stripe/psychosocialCheckoutAuthority.ts",
+        "lib/supabase/sharedAccessSync.ts",
         "lib/supabase/sharedSuiteAccess.ts",
-        "supabase/migrations/20260713_shared_suite_access.sql"
+        "app/api/auth/signup/route.ts",
+        "app/api/stripe/create-checkout-session/route.ts",
+        "app/api/stripe/webhook/route.ts",
+        "supabase/migrations/20260713_shared_suite_access.sql",
+        "supabase/migrations/20260713_shared_access_security_hardening.sql"
       ].filter(existsSync);
       const source = sourcePaths
         .map((path) => readFileSync(path, "utf8").toLowerCase())
@@ -165,6 +268,16 @@ for (const test of tests) {
     console.error(`FAIL ${test.name}`);
     console.error(error);
   }
+}
+
+function approvedMetadata(userId: string) {
+  return {
+    access_package: "standard_agency_access",
+    billing_model: "upfront_plus_monthly",
+    plan_code: "psychosocial",
+    product_code: "psychosocial",
+    supabase_user_id: userId
+  };
 }
 
 if (failures > 0) {

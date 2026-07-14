@@ -5,13 +5,31 @@ import Stripe from "stripe";
 type CheckoutLineItem = Stripe.Checkout.SessionCreateParams.LineItem;
 
 export function hasStripeCheckoutConfig() {
-  return Boolean(process.env.STRIPE_SECRET_KEY);
+  return Boolean(
+    process.env.STRIPE_SECRET_KEY &&
+      process.env.STRIPE_STANDARD_ACCESS_UPFRONT_PRICE_ID &&
+      process.env.STRIPE_STANDARD_ACCESS_MONTHLY_PRICE_ID
+  );
 }
 
 export function hasStripeWebhookConfig() {
   return Boolean(
-    process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET
+    process.env.STRIPE_SECRET_KEY &&
+      process.env.STRIPE_WEBHOOK_SECRET &&
+      process.env.STRIPE_STANDARD_ACCESS_UPFRONT_PRICE_ID &&
+      process.env.STRIPE_STANDARD_ACCESS_MONTHLY_PRICE_ID
   );
+}
+
+export function getStandardAccessPriceIds() {
+  const upfrontPriceId = process.env.STRIPE_STANDARD_ACCESS_UPFRONT_PRICE_ID;
+  const monthlyPriceId = process.env.STRIPE_STANDARD_ACCESS_MONTHLY_PRICE_ID;
+
+  if (!upfrontPriceId || !monthlyPriceId) {
+    throw new Error("Approved Psychosocial Stripe Price IDs are not configured.");
+  }
+
+  return { monthlyPriceId, upfrontPriceId };
 }
 
 export function createStripeClient() {

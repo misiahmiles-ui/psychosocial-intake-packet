@@ -4,6 +4,10 @@ import {
   hasSupabaseAdminConfig
 } from "@/lib/supabase/server";
 import { updateUserAppMetadata } from "@/lib/supabase/accessMetadata";
+import {
+  createAccountOrganization,
+  rollbackAccountSignup
+} from "@/lib/supabase/sharedAccessSync";
 
 type SignupPayload = {
   agencyName?: unknown;
@@ -75,26 +79,44 @@ export async function POST(request: Request) {
   }
 
   if (data.user?.id) {
-    await updateUserAppMetadata(admin, data.user.id, {
-      access_package: "standard_agency_access",
-      billing_model: "upfront_plus_monthly",
-      has_access: false
-    });
-
-    const { error: profileError } = await admin.from("profiles").upsert({
-      agency_name: agencyName,
-      email,
-      full_name: fullName,
-      id: data.user.id,
-      username,
-      updated_at: new Date().toISOString()
-    });
-
-    if (profileError) {
-      console.warn("Buyer profile table update skipped.", {
-        code: profileError.code,
-        message: profileError.message
+    try {
+      await updateUserAppMetadata(admin, data.user.id, {
+        access_package: "standard_agency_access",
+        billing_model: "upfront_plus_monthly",
+        has_access: false
       });
+
+      const { error: profileError } = await admin.from("profiles").upsert({
+        account_role: "buyer",
+        agency_name: agencyName,
+        email,
+        full_name: fullName,
+        id: data.user.id,
+        username,
+        updated_at: new Date().toISOString()
+      });
+
+      if (profileError) {
+        throw new Error(`Buyer profile creation failed: ${profileError.message}`);
+      }
+
+      await createAccountOrganization(admin, {
+        facilityName: agencyName,
+        userId: data.user.id
+      });
+    } catch (sharedAccessError) {
+      console.error("Shared facility account setup failed.", sharedAccessError);
+
+      try {
+        await rollbackAccountSignup(admin, data.user.id);
+      } catch (rollbackError) {
+        console.error("Incomplete buyer account rollback failed.", rollbackError);
+      }
+
+      return NextResponse.json(
+        { error: "The facility account could not be prepared." },
+        { status: 500 }
+      );
     }
   }
 
