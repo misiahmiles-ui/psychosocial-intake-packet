@@ -218,7 +218,7 @@ export function AdultDayIntakeProMarketing() {
                 View Nursing Intake <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
               </a>
             </article>
-            <article className="rounded-xl border-2 border-[#45613a] bg-[#eef8f4] p-6 shadow-sm">
+            <a href="https://adult-day-nursing-intake-pro.vercel.app/signup" className="group block rounded-xl border-2 border-[#45613a] bg-[#eef8f4] p-6 shadow-sm transition hover:bg-[#e1f3ec] hover:shadow-md focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#8fc1e5] focus-visible:ring-offset-2">
               <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#45613a]">Best Value</p>
               <h3 className="mt-2 text-xl font-bold">Adult Day Complete Intake Suite™</h3>
               <p className="mt-3 text-3xl font-bold">$797 <span className="text-base font-semibold">upfront</span></p>
@@ -227,8 +227,8 @@ export function AdultDayIntakeProMarketing() {
               <p className="mt-3 text-sm leading-6 text-[#435665]">Includes one Psychosocial workflow seat and one Nursing workflow seat. Assign them to two employees or both to one employee using one login.</p>
               <p className="mt-2 text-sm font-semibold text-[#435665]">Additional Suite seats: $7/month per Psychosocial or Nursing workflow assignment; both workflows for one additional employee cost $14/month.</p>
               <p className="mt-2 text-sm text-[#435665]">No additional upfront charge for seats.</p>
-              <p className="mt-5 font-bold text-[#174f80]">Request Suite Access (coming soon)</p>
-            </article>
+              <span className="mt-5 inline-flex items-center font-bold text-[#174f80] group-hover:underline">Purchase Complete Suite <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" /></span>
+            </a>
           </div>
           <div className="mt-8 rounded-xl border border-[#d7ded4] bg-white p-5 text-sm leading-6 text-[#435665]">
             <p><strong>Separately:</strong> $974 upfront plus $38/month. <strong>Suite first-year savings:</strong> $285.</p>

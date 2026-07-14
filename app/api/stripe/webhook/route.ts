@@ -93,7 +93,11 @@ export async function POST(request: Request) {
 async function handleCompletedCheckout(stripe: Stripe, event: Stripe.Event) {
   const session = event.data.object as Stripe.Checkout.Session;
 
-  if (session.payment_status !== "paid") {
+  if (
+    session.payment_status !== "paid" ||
+    session.metadata?.product_code !== "psychosocial" ||
+    session.metadata?.plan_code !== "psychosocial"
+  ) {
     return;
   }
 
@@ -177,6 +181,13 @@ async function handleSubscriptionChange(
   const subscription = refreshCurrent
     ? await stripe.subscriptions.retrieve(eventSubscription.id)
     : eventSubscription;
+
+  if (
+    subscription.metadata?.product_code !== "psychosocial" ||
+    subscription.metadata?.plan_code !== "psychosocial"
+  ) {
+    return;
+  }
   const userId = subscription.metadata?.supabase_user_id;
   const customerId = stripeObjectId(subscription.customer);
 

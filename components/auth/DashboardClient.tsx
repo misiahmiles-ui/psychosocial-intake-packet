@@ -9,6 +9,8 @@ import {
 
 const NURSING_DASHBOARD_URL =
   "https://adult-day-nursing-intake-pro.vercel.app/dashboard";
+const FACILITY_ACCOUNT_URL =
+  "https://adult-day-nursing-intake-pro.vercel.app/account";
 
 export function DashboardClient() {
   return (
@@ -69,6 +71,14 @@ function DashboardContent({ access }: { access: ActiveAccessDetails }) {
                 >
                   Open Nursing Workflow
                   <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                </a>
+              ) : null}
+              {access.organizationRole === "facility_admin" && !access.isOwner ? (
+                <a
+                  className="inline-flex min-h-12 items-center rounded-lg border border-sea bg-mint px-5 py-3 font-bold text-sea transition hover:bg-[#dff3ed]"
+                  href={FACILITY_ACCOUNT_URL}
+                >
+                  Manage Billing &amp; Seats
                 </a>
               ) : null}
               <Link

@@ -20,6 +20,7 @@ export type ActiveAccessDetails = {
   email: string | null;
   isOwner: boolean;
   organizationName: string | null;
+  organizationRole: "facility_admin" | "staff" | null;
   subscriptionPlan: SubscriptionPlan | null;
   workflowAccess: WorkflowAccess;
 };
@@ -94,6 +95,7 @@ export function ProtectedAccess({ children }: ProtectedAccessProps) {
       email: string | null;
       isOwner?: boolean;
       organizationName?: string | null;
+      organizationRole?: "facility_admin" | "staff" | null;
       subscriptionPlan?: SubscriptionPlan | null;
       workflowAccess?: WorkflowAccess;
     };
@@ -110,6 +112,7 @@ export function ProtectedAccess({ children }: ProtectedAccessProps) {
             email: data.email,
             isOwner: data.isOwner === true,
             organizationName: data.organizationName ?? null,
+            organizationRole: data.organizationRole ?? null,
             subscriptionPlan: data.subscriptionPlan ?? null,
             workflowAccess
           }
