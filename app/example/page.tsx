@@ -57,7 +57,7 @@ export default function ExamplePage() {
           </p>
         </div>
 
-        <ReviewPacket packet={examplePacket} />
+        <ReviewPacket packet={examplePacket} publicPreview />
       </section>
     </main>
   );
