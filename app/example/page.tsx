@@ -49,9 +49,11 @@ export default function ExamplePage() {
             Example PDF downloads
           </p>
           <p className="mt-2 leading-7 text-[#52645f]">
-            Download the example draft PDF to see editable fields, checkbox and
-            radio controls, selected-answer summaries, and scoring output.
-            Download the final PDF to see a completed packet-style export.
+            Each download is a two-page, flattened visual preview. The draft
+            preview shows how editable fields and selection controls appear,
+            while the final preview shows the completed packet-style output.
+            These public examples are intentionally limited and are not
+            editable.
           </p>
         </div>
 
