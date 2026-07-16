@@ -19,6 +19,7 @@ type MembershipRow = {
 type OrganizationRow = {
   facility_name: string;
   id: string;
+  intake_jurisdiction: "NJ" | "MD";
 };
 
 type SubscriptionRow = {
@@ -73,7 +74,7 @@ export async function getSharedSuiteAccess(
     await Promise.all([
       admin
         .from("organizations")
-        .select("id,facility_name")
+        .select("id,facility_name,intake_jurisdiction")
         .eq("id", membership.organization_id)
         .maybeSingle(),
       admin
@@ -121,6 +122,7 @@ export async function getSharedSuiteAccess(
 
   return {
     organizationId: membership.organization_id,
+    intakeJurisdiction: organization?.intake_jurisdiction ?? "NJ",
     organizationName: organization?.facility_name ?? null,
     organizationRole: membership.role,
     seatLimits,
@@ -142,6 +144,7 @@ export async function getSharedSuiteAccess(
 function emptySharedAccess() {
   return {
     organizationId: null,
+    intakeJurisdiction: "NJ" as const,
     organizationName: null,
     organizationRole: null,
     seatLimits: { nursing: 0, psychosocial: 0 } satisfies WorkflowSeatLimits,

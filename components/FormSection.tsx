@@ -78,6 +78,9 @@ function MarylandResourceNotice() {
         <a className="font-bold text-sea underline" href={MARYLAND_OFFICIAL_RESOURCES.adcaps} target="_blank" rel="noreferrer">
           Official ADCAPS form (RN completion required)
         </a>
+        <a className="font-bold text-sea underline" href={MARYLAND_OFFICIAL_RESOURCES.adcapsGuidelines} target="_blank" rel="noreferrer">
+          Official ADCAPS completion guidelines
+        </a>
       </div>
       <p className="mt-3 font-semibold">
         ADCAPS must be completed by a registered nurse. Psychosocial staff may

@@ -144,8 +144,10 @@ export async function GET(request: Request) {
     ? { nursing: true, psychosocial: true }
     : sharedAccess?.workflowAccess ?? legacyWorkflowAccess(legacyHasAccess);
   const psychosocialJurisdictions = normalizeAuthorizedJurisdictions(
-    appMetadata.psychosocial_jurisdictions ??
-      appMetadata.psychosocial_jurisdiction,
+    sharedAccess?.organizationId
+      ? sharedAccess.intakeJurisdiction
+      : appMetadata.psychosocial_jurisdictions ??
+        appMetadata.psychosocial_jurisdiction,
     ownerAuthorization.isOwner
   );
 

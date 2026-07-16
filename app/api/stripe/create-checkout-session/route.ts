@@ -49,6 +49,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 
+  const payload = (await request.json().catch(() => ({}))) as {
+    jurisdiction?: unknown;
+  };
+  const jurisdiction = payload.jurisdiction === "MD" ? "MD" : "NJ";
+
   const appMetadata = user.app_metadata as Record<string, unknown>;
   const { data: profile, error: profileError } = await admin
     .from("profiles")
@@ -100,12 +105,20 @@ export async function POST(request: Request) {
   }
 
   try {
-    await assertPsychosocialPurchaseAllowed(
+    const { organizationId } = await assertPsychosocialPurchaseAllowed(
       admin,
       user.id,
       profile?.agency_name,
       { forNewCheckout: true }
     );
+    const { error: jurisdictionError } = await admin
+      .from("organizations")
+      .update({ intake_jurisdiction: jurisdiction })
+      .eq("id", organizationId);
+
+    if (jurisdictionError) {
+      throw jurisdictionError;
+    }
   } catch (sharedAccessError) {
     const isConflict = sharedAccessError instanceof SharedAccessConflictError;
     console.error("Psychosocial checkout authorization failed.", sharedAccessError);
@@ -134,6 +147,7 @@ export async function POST(request: Request) {
       billing_model: "upfront_plus_monthly",
       plan_code: "psychosocial",
       product_code: "psychosocial",
+      intake_jurisdiction: jurisdiction,
       supabase_user_id: user.id
     },
     mode: "subscription",
@@ -143,6 +157,7 @@ export async function POST(request: Request) {
         billing_model: "upfront_plus_monthly",
         plan_code: "psychosocial",
         product_code: "psychosocial",
+        intake_jurisdiction: jurisdiction,
         supabase_user_id: user.id
       }
     },
@@ -156,6 +171,7 @@ export async function POST(request: Request) {
   await updateUserAppMetadata(admin, user.id, {
     access_package: "standard_agency_access",
     billing_model: "upfront_plus_monthly",
+    psychosocial_jurisdictions: [jurisdiction],
     stripe_checkout_session_id: session.id,
     stripe_customer_id: customerId
   });

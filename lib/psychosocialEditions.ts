@@ -18,7 +18,9 @@ export const MARYLAND_OFFICIAL_RESOURCES = {
   regulations:
     "https://regs.maryland.gov/us/md/exec/comar/10.12/index.full.html",
   adcaps:
-    "https://health.maryland.gov/ohcq/Documents/Providers/AMDC/Forms/ADCAPS-form.pdf"
+    "https://health.maryland.gov/ohcq/docs/Providers/AMDC/AMDC-ADCAPS-Assessment-01.01.2012-A.pdf",
+  adcapsGuidelines:
+    "https://health.maryland.gov/ohcq/docs/Providers/AMDC/AMDC-Guidelines-for-Completing-ADCAPS-08.01.2018-A.pdf"
 } as const;
 
 const statusOptions = [
@@ -105,9 +107,26 @@ const marylandAdmissionStep: IntakeStep = {
         },
         { path: "maryland.socialWorkerLicenseNumber", label: "Maryland social-work license number" },
         { path: "maryland.adcapsTrackingStatus", label: "Official ADCAPS tracking status (RN-owned)", kind: "select", options: statusOptions },
-        { path: "maryland.adcapsCompletionDate", label: "Official ADCAPS completion date (within 30 days of admission)", kind: "date" },
-        { path: "maryland.adcapsNextReviewDate", label: "Next ADCAPS review due (not later than 120 days if no significant change)", kind: "date" },
-        { path: "maryland.adcapsRegisteredNurse", label: "Registered nurse documented on official ADCAPS" },
+        {
+          path: "maryland.adcapsCompletionDate",
+          label: "RN-completed official ADCAPS date (tracking only)",
+          kind: "date",
+          helpText:
+            "Copy the completion date from the official RN-completed ADCAPS. Psychosocial staff do not complete or certify ADCAPS here."
+        },
+        {
+          path: "maryland.adcapsNextReviewDate",
+          label: "Next official ADCAPS review due (RN-owned tracking)",
+          kind: "date",
+          helpText:
+            "Track the date supplied by nursing or the official record. The nursing workflow and current Maryland guidance control the required review timing."
+        },
+        {
+          path: "maryland.adcapsRegisteredNurse",
+          label: "Registered nurse named on official ADCAPS (tracking only)",
+          helpText:
+            "Enter the RN name shown on the official ADCAPS; this field is not an RN signature or certification."
+        },
         { path: "maryland.significantChangeDate", label: "Significant change date, if applicable", kind: "date" },
         { path: "maryland.significantChangeReassessmentStatus", label: "Next-attendance-day reassessment tracking status", kind: "select", options: statusOptions },
         { path: "maryland.planOfCareCoordinationStatus", label: "Plan-of-care coordination status", kind: "select", options: statusOptions },

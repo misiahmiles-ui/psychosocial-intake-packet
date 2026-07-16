@@ -51,6 +51,8 @@ export function ProtectedAccess({ children }: ProtectedAccessProps) {
     supabaseConfigured ? { state: "loading" } : { state: "setup-missing" }
   );
   const [isCheckingOut, setIsCheckingOut] = useState(false);
+  const [selectedJurisdiction, setSelectedJurisdiction] =
+    useState<PsychosocialJurisdiction>("NJ");
 
   const refreshStatus = useCallback(async () => {
     if (!supabase) {
@@ -157,9 +159,11 @@ export function ProtectedAccess({ children }: ProtectedAccessProps) {
       }
 
       const response = await fetch("/api/stripe/create-checkout-session", {
+        body: JSON.stringify({ jurisdiction: selectedJurisdiction }),
         method: "POST",
         headers: {
-          Authorization: `Bearer ${session.access_token}`
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json"
         }
       });
 
@@ -293,6 +297,31 @@ export function ProtectedAccess({ children }: ProtectedAccessProps) {
                   Complete the upfront access payment and monthly hosted access
                   subscription to unlock the hosted workflow dashboard.
                 </p>
+                <fieldset className="mt-4">
+                  <legend className="text-sm font-bold text-ink">
+                    Choose the facility edition
+                  </legend>
+                  <div className="mt-2 flex flex-wrap gap-3">
+                    {(["NJ", "MD"] as const).map((value) => (
+                      <label
+                        className="flex cursor-pointer items-center gap-2 rounded-lg border border-[#d7dfdc] bg-white px-4 py-3 text-sm font-bold text-ink"
+                        key={value}
+                      >
+                        <input
+                          checked={selectedJurisdiction === value}
+                          name="psychosocial-jurisdiction"
+                          onChange={() => setSelectedJurisdiction(value)}
+                          type="radio"
+                          value={value}
+                        />
+                        {value === "MD" ? "Maryland" : "New Jersey"}
+                      </label>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-xs font-semibold leading-5 text-[#643524]">
+                    The price is the same for either state edition.
+                  </p>
+                </fieldset>
               </div>
               <button
                 className="mt-4 inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-sea px-5 py-3 font-bold text-white shadow-soft transition hover:bg-[#0b615b] disabled:cursor-not-allowed disabled:opacity-60"
