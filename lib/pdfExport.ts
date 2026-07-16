@@ -94,7 +94,7 @@ export async function buildPacketPdf(
   if (jurisdiction === "MD") {
     drawText(
       context,
-      "Maryland edition note: This psychosocial workflow does not replace official Maryland forms, the registered-nurse-completed ADCAPS, or the nursing plan of care.",
+      "Maryland edition note: This psychosocial workflow does not replace official Maryland forms, agency review, or required clinical assessments.",
       9,
       false,
       12

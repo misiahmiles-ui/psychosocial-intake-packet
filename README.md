@@ -37,7 +37,7 @@ The app uses local PDF export only and does not save drafts internally. Editable
 
 The New Jersey Psychosocial Edition remains the protected 18-step baseline. Legacy packets and access records without a jurisdiction value resolve to New Jersey.
 
-The Maryland Psychosocial Edition reuses the clinically equivalent baseline sections and adds a Maryland-only admission-document and coordination addendum. The addendum tracks the preadmission assessment, service contract, participant rights, home-environment assessment, Maryland social-work credential, referrals, multidisciplinary participation, official Maryland forms, and discharge documentation. It does not reproduce official government forms and does not represent a social worker as completing the RN-only ADCAPS or nursing plan of care.
+The Maryland Psychosocial Edition reuses the clinically equivalent baseline sections and adds a Maryland-only psychosocial coordination addendum. The addendum tracks the preadmission assessment, service contract, participant rights, home-environment assessment, Maryland social-work credential, referrals, multidisciplinary participation, official psychosocial forms, and discharge documentation. ADCAPS and RN-owned clinical tracking remain in the Maryland Nursing Edition.
 
 Current official Maryland references used for the addendum:
 

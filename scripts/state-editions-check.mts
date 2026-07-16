@@ -31,7 +31,7 @@ assert.match(editions, /within 45 days before admission/);
 assert.match(editions, /not later than 120 days/);
 assert.match(editions, /within 7 calendar days/);
 assert.match(editions, /at least semiannually/);
-assert.match(editions, /Official ADCAPS completed by a registered nurse/i);
+assert.doesNotMatch(editions, /ADCAPS|registered nurse/i);
 assert.match(editions, /LBSW/);
 assert.match(editions, /LMSW/);
 assert.match(editions, /LCSW-C/);
@@ -51,7 +51,7 @@ for (const prohibited of [
 }
 
 console.log("PASS New Jersey baseline remains 18 steps with no Maryland content");
-console.log("PASS Maryland edition is conditional and includes verified tracking");
+console.log("PASS Maryland edition is conditional and keeps RN-owned ADCAPS tracking out of psychosocial");
 console.log("PASS legacy and state-specific access resolution");
 console.log("PASS review and PDF export select the packet jurisdiction");
 console.log("PASS no browser persistence was introduced");

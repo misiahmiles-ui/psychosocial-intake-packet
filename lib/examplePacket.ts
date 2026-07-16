@@ -319,7 +319,6 @@ marylandExamplePacket.maryland = {
   officialForms: [
     "Maryland Medical Day Care Freedom of Choice form",
     "Maryland Participant Rights and Responsibilities form",
-    "Official ADCAPS completed by a registered nurse",
     "Official service plan / plan-of-care record"
   ],
   preadmissionAssessmentDate: "2026-07-01",
@@ -333,10 +332,6 @@ marylandExamplePacket.maryland = {
   socialWorkConsultationDate: "2026-07-06",
   socialWorkerCredential: "LMSW",
   socialWorkerLicenseNumber: "FICTITIOUS-MD-LICENSE",
-  adcapsTrackingStatus: "Received / completed",
-  adcapsCompletionDate: "2026-07-20",
-  adcapsNextReviewDate: "2026-11-17",
-  adcapsRegisteredNurse: "Morgan Example, RN (fictitious)",
   significantChangeDate: "",
   significantChangeReassessmentStatus: "Not applicable",
   planOfCareCoordinationStatus: "Received / completed",

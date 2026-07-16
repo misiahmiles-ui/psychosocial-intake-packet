@@ -149,10 +149,6 @@ export type IntakePacket = {
     socialWorkConsultationDate: string;
     socialWorkerCredential: string;
     socialWorkerLicenseNumber: string;
-    adcapsTrackingStatus: string;
-    adcapsCompletionDate: string;
-    adcapsNextReviewDate: string;
-    adcapsRegisteredNurse: string;
     significantChangeDate: string;
     significantChangeReassessmentStatus: string;
     planOfCareCoordinationStatus: string;

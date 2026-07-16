@@ -10,19 +10,6 @@ export const JURISDICTION_LABELS: Record<PsychosocialJurisdiction, string> = {
   MD: "Maryland Psychosocial Edition"
 };
 
-export const MARYLAND_OFFICIAL_RESOURCES = {
-  adultMedicalDayCare:
-    "https://health.maryland.gov/ohcq/Pages/Adult-Medical-Day-Care-Resources.aspx",
-  medicalDayCareServices:
-    "https://health.maryland.gov/mmcp/longtermcare/Pages/Medical-Day-Care-Services.aspx?Mobile=1",
-  regulations:
-    "https://regs.maryland.gov/us/md/exec/comar/10.12/index.full.html",
-  adcaps:
-    "https://health.maryland.gov/ohcq/docs/Providers/AMDC/AMDC-ADCAPS-Assessment-01.01.2012-A.pdf",
-  adcapsGuidelines:
-    "https://health.maryland.gov/ohcq/docs/Providers/AMDC/AMDC-Guidelines-for-Completing-ADCAPS-08.01.2018-A.pdf"
-} as const;
-
 const statusOptions = [
   { label: "Not started", value: "Not started" },
   { label: "Requested", value: "Requested" },
@@ -36,7 +23,7 @@ const marylandAdmissionStep: IntakeStep = {
   shortTitle: "MD Admission",
   eyebrow: "Maryland Addendum",
   description:
-    "Maryland Adult Medical Day Care admission-document tracking for psychosocial, rights, consent, home-environment, referral, and multidisciplinary coordination. This checklist does not replace official Maryland forms or RN-only assessments.",
+    "Maryland Adult Medical Day Care psychosocial tracking for rights, consent, home-environment, referral, and multidisciplinary coordination. This addendum does not replace official Maryland forms or agency review.",
   groups: [
     {
       title: "Admission Document Checklist",
@@ -68,7 +55,6 @@ const marylandAdmissionStep: IntakeStep = {
             { label: "Maryland Medical Day Care Freedom of Choice form", value: "Maryland Medical Day Care Freedom of Choice form" },
             { label: "Maryland Participant Rights and Responsibilities form", value: "Maryland Participant Rights and Responsibilities form" },
             { label: "Maryland participant health-related assessment / required provider form", value: "Maryland participant health-related assessment / required provider form" },
-            { label: "Official ADCAPS completed by a registered nurse", value: "Official ADCAPS completed by a registered nurse" },
             { label: "Official service plan / plan-of-care record", value: "Official service plan / plan-of-care record" },
             { label: "Official signature record", value: "Official signature record" }
           ]
@@ -90,7 +76,7 @@ const marylandAdmissionStep: IntakeStep = {
     {
       title: "Maryland Social Work and Multidisciplinary Coordination",
       description:
-        "Document the social worker's contribution. Do not use this section to represent completion of the ADCAPS or nursing plan of care.",
+        "Document the social worker's contribution to goals, referrals, and multidisciplinary planning within credentials and agency policy.",
       fields: [
         { path: "maryland.socialWorkConsultationStatus", label: "Social-work consultation status", kind: "select", options: statusOptions },
         { path: "maryland.socialWorkConsultationDate", label: "Social-work consultation date", kind: "date" },
@@ -106,27 +92,6 @@ const marylandAdmissionStep: IntakeStep = {
           ]
         },
         { path: "maryland.socialWorkerLicenseNumber", label: "Maryland social-work license number" },
-        { path: "maryland.adcapsTrackingStatus", label: "Official ADCAPS tracking status (RN-owned)", kind: "select", options: statusOptions },
-        {
-          path: "maryland.adcapsCompletionDate",
-          label: "RN-completed official ADCAPS date (tracking only)",
-          kind: "date",
-          helpText:
-            "Copy the completion date from the official RN-completed ADCAPS. Psychosocial staff do not complete or certify ADCAPS here."
-        },
-        {
-          path: "maryland.adcapsNextReviewDate",
-          label: "Next official ADCAPS review due (RN-owned tracking)",
-          kind: "date",
-          helpText:
-            "Track the date supplied by nursing or the official record. The nursing workflow and current Maryland guidance control the required review timing."
-        },
-        {
-          path: "maryland.adcapsRegisteredNurse",
-          label: "Registered nurse named on official ADCAPS (tracking only)",
-          helpText:
-            "Enter the RN name shown on the official ADCAPS; this field is not an RN signature or certification."
-        },
         { path: "maryland.significantChangeDate", label: "Significant change date, if applicable", kind: "date" },
         { path: "maryland.significantChangeReassessmentStatus", label: "Next-attendance-day reassessment tracking status", kind: "select", options: statusOptions },
         { path: "maryland.planOfCareCoordinationStatus", label: "Plan-of-care coordination status", kind: "select", options: statusOptions },
@@ -188,7 +153,7 @@ export function getIntakeSteps(
       return {
         ...step,
         description:
-          "Adapted Kahn-style orientation and memory screen with an automatic error-count summary. This is a screening aid, not a diagnosis, capacity determination, Maryland program-eligibility determination, or substitute for the RN-completed ADCAPS."
+          "Adapted Kahn-style orientation and memory screen with an automatic error-count summary. This is a screening aid, not a diagnosis, capacity determination, Maryland program-eligibility determination, or substitute for required clinical assessment."
       };
     }
 
