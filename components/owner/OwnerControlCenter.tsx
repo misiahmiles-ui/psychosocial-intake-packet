@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   ArrowRight,
@@ -11,7 +12,11 @@ import {
 } from "lucide-react";
 import { OwnerAccess, type OwnerStatusData } from "@/components/auth/OwnerAccess";
 import { OwnerExportTestPanel } from "./OwnerExportTestPanel";
-import { INTAKE_STEPS } from "@/lib/sections";
+import {
+  getIntakeSteps,
+  JURISDICTION_LABELS
+} from "@/lib/psychosocialEditions";
+import type { PsychosocialJurisdiction } from "@/types/intake";
 
 export function OwnerControlCenter() {
   return (
@@ -22,6 +27,11 @@ export function OwnerControlCenter() {
 }
 
 function OwnerControlCenterContent({ data }: { data: OwnerStatusData }) {
+  const [jurisdiction, setJurisdiction] =
+    useState<PsychosocialJurisdiction>("NJ");
+  const intakeSteps = getIntakeSteps(jurisdiction);
+  const editionQuery = `edition=${jurisdiction}`;
+
   return (
     <main className="min-h-screen bg-cloud text-ink">
       <header className="border-b border-[#d7dfdc] bg-white">
@@ -38,6 +48,26 @@ function OwnerControlCenterContent({ data }: { data: OwnerStatusData }) {
             exports, and preview the customer experience without creating a
             Stripe payment or storing clinical information.
           </p>
+          <div className="mt-5 inline-flex rounded-lg border border-[#b9c7c3] bg-white p-1" aria-label="Owner edition review">
+            {(["NJ", "MD"] as const).map((edition) => (
+              <button
+                key={edition}
+                type="button"
+                onClick={() => setJurisdiction(edition)}
+                aria-pressed={jurisdiction === edition}
+                className={`min-h-10 rounded-md px-4 py-2 text-sm font-bold transition ${
+                  jurisdiction === edition
+                    ? "bg-sea text-white"
+                    : "text-ink hover:bg-mint"
+                }`}
+              >
+                {edition === "NJ" ? "New Jersey Edition" : "Maryland Edition"}
+              </button>
+            ))}
+          </div>
+          <p className="mt-3 text-sm font-bold text-sea">
+            Reviewing: {JURISDICTION_LABELS[jurisdiction]}
+          </p>
         </div>
       </header>
 
@@ -49,19 +79,19 @@ function OwnerControlCenterContent({ data }: { data: OwnerStatusData }) {
             </h2>
             <div className="mt-4 grid gap-3">
               <OwnerActionLink
-                href="/owner/intake?mode=review"
+                href={`/owner/intake?mode=review&${editionQuery}`}
                 icon={ClipboardList}
-                title="Open Full Psychosocial Intake Workflow"
-                text="Open the blank interactive workflow with owner review navigation."
+                title={`Open Full ${jurisdiction === "MD" ? "Maryland" : "New Jersey"} Psychosocial Intake`}
+                text="Open the blank interactive workflow for the selected state edition."
               />
               <OwnerActionLink
-                href="/owner/intake?mode=buyer"
+                href={`/owner/intake?mode=buyer&${editionQuery}`}
                 icon={Eye}
                 title="Preview Buyer Experience"
                 text="See the protected workflow as a purchaser would, with owner access bypassing Stripe only for this account."
               />
               <OwnerActionLink
-                href="/owner/intake?mode=review&demo=1"
+                href={`/owner/intake?mode=review&demo=1&${editionQuery}`}
                 icon={FileText}
                 title="Load Fictitious Demonstration Case"
                 text="Load fictional, non-PHI sample data to test review, export, and print output."
@@ -69,7 +99,7 @@ function OwnerControlCenterContent({ data }: { data: OwnerStatusData }) {
             </div>
           </section>
 
-          <OwnerExportTestPanel />
+          <OwnerExportTestPanel jurisdiction={jurisdiction} />
 
           <ProductInfo data={data} />
         </div>
@@ -85,7 +115,7 @@ function OwnerControlCenterContent({ data }: { data: OwnerStatusData }) {
               </p>
             </div>
             <Link
-              href="/owner/intake?mode=review"
+              href={`/owner/intake?mode=review&${editionQuery}`}
               className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-sea px-4 py-2 text-sm font-bold text-white transition hover:bg-[#0b615b]"
             >
               Start Review
@@ -93,7 +123,7 @@ function OwnerControlCenterContent({ data }: { data: OwnerStatusData }) {
             </Link>
           </div>
           <div className="mt-5 grid gap-3">
-            {INTAKE_STEPS.map((step, index) => {
+            {intakeSteps.map((step, index) => {
               const fields = [
                 ...(step.fields ?? []),
                 ...(step.groups?.flatMap((group) => group.fields) ?? [])
@@ -103,7 +133,7 @@ function OwnerControlCenterContent({ data }: { data: OwnerStatusData }) {
               return (
                 <Link
                   key={step.id}
-                  href={`/owner/intake?mode=review&step=${index}`}
+                  href={`/owner/intake?mode=review&step=${index}&${editionQuery}`}
                   className="grid gap-3 rounded-lg border border-[#e4ebe8] bg-[#fbfcfb] p-4 transition hover:border-sea sm:grid-cols-[2.25rem_1fr]"
                 >
                   <span className="flex h-9 w-9 items-center justify-center rounded-full bg-mint text-sm font-bold text-sea">
@@ -123,7 +153,7 @@ function OwnerControlCenterContent({ data }: { data: OwnerStatusData }) {
               );
             })}
             <Link
-              href={`/owner/intake?mode=review&step=${INTAKE_STEPS.length}`}
+              href={`/owner/intake?mode=review&step=${intakeSteps.length}&${editionQuery}`}
               className="rounded-lg border border-[#f0d3c8] bg-[#fff8f5] p-4 font-bold text-clay transition hover:border-clay"
             >
               Review & Export screen

@@ -1,7 +1,11 @@
 "use client";
 
 import type { FieldDefinition, IntakePacket, IntakeStep } from "@/types/intake";
-import { INTAKE_STEPS } from "@/lib/sections";
+import {
+  getIntakeSteps,
+  JURISDICTION_LABELS,
+  resolvePsychosocialJurisdiction
+} from "@/lib/psychosocialEditions";
 import { formatValue, getValueByPath, scoreMentalStatus } from "@/lib/packetUtils";
 
 export function ReviewPacket({
@@ -11,7 +15,9 @@ export function ReviewPacket({
   packet: IntakePacket;
   publicPreview?: boolean;
 }) {
-  const visibleSteps = publicPreview ? INTAKE_STEPS.slice(0, 2) : INTAKE_STEPS;
+  const jurisdiction = resolvePsychosocialJurisdiction(packet);
+  const intakeSteps = getIntakeSteps(jurisdiction);
+  const visibleSteps = publicPreview ? intakeSteps.slice(0, 2) : intakeSteps;
 
   return (
     <section className="rounded-lg border border-[#d7dfdc] bg-white p-5 shadow-sm sm:p-6">
@@ -22,6 +28,11 @@ export function ReviewPacket({
         <h2 className="mt-2 text-2xl font-bold tracking-normal text-ink">
           {publicPreview ? "Packet Review Preview" : "Packet Review"}
         </h2>
+        {!publicPreview ? (
+          <p className="mt-2 text-sm font-bold text-sea">
+            {JURISDICTION_LABELS[jurisdiction]}
+          </p>
+        ) : null}
         <p className="mt-2 max-w-3xl leading-7 text-[#52645f]">
           {publicPreview
             ? "This public page displays only two sample sections. The complete packet review is available only inside the protected purchaser workflow."
@@ -41,7 +52,7 @@ export function ReviewPacket({
       </div>
       {publicPreview ? (
         <p className="mt-5 rounded-lg border border-[#cde7df] bg-mint p-4 text-sm font-semibold leading-6 text-[#334642]">
-          Public preview limited to 2 of {INTAKE_STEPS.length} sections. Sample
+          Public preview limited to 2 of {intakeSteps.length} sections. Sample
           content is fictitious and is not for clinical use.
         </p>
       ) : null}

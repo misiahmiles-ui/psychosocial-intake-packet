@@ -8,7 +8,11 @@ import {
   StandardFonts
 } from "pdf-lib";
 import type { FieldDefinition, IntakePacket, IntakeStep } from "@/types/intake";
-import { INTAKE_STEPS } from "./sections";
+import {
+  getIntakeSteps,
+  JURISDICTION_LABELS,
+  resolvePsychosocialJurisdiction
+} from "./psychosocialEditions";
 import { BRAND_PLACEHOLDERS, PRODUCT_NAME } from "./placeholders";
 import {
   companyFooter,
@@ -52,6 +56,7 @@ export async function buildPacketPdf(
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const logoImage = await embedLogoImage(pdfDoc, packet.company.logoUrl);
+  const jurisdiction = resolvePsychosocialJurisdiction(packet);
 
   const context: PdfContext = {
     pdfDoc,
@@ -68,6 +73,7 @@ export async function buildPacketPdf(
 
   drawPacketHeader(context);
   drawText(context, PRODUCT_NAME, 22, true, 16);
+  drawText(context, JURISDICTION_LABELS[jurisdiction], 12, true, 8);
   drawText(
     context,
     mode === "draft"
@@ -85,7 +91,16 @@ export async function buildPacketPdf(
     22
   );
 
-  INTAKE_STEPS.forEach((step) => drawStep(context, step));
+  if (jurisdiction === "MD") {
+    drawText(
+      context,
+      "Maryland edition note: This psychosocial workflow does not replace official Maryland forms, the registered-nurse-completed ADCAPS, or the nursing plan of care.",
+      9,
+      false,
+      12
+    );
+  }
+  getIntakeSteps(jurisdiction).forEach((step) => drawStep(context, step));
   drawPageNumbers(context);
   if (mode === "draft" && context.form) {
     drawDraftWatermark(context);

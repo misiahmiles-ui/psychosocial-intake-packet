@@ -8,6 +8,7 @@
     "start": "next start",
     "test:owner": "node scripts/owner-access-check.mjs",
     "test:shared-suite": "node scripts/shared-suite-access-check.mts",
+    "test:state-editions": "node scripts/state-editions-check.mts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

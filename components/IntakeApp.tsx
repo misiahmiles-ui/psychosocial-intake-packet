@@ -5,7 +5,11 @@ import { type MouseEvent, useEffect, useMemo, useState } from "react";
 import { FormProvider, useForm, useWatch } from "react-hook-form";
 import { ArrowLeft, ArrowRight, Home, ShieldCheck } from "lucide-react";
 import { defaultValues } from "@/lib/defaultValues";
-import { INTAKE_STEPS } from "@/lib/sections";
+import {
+  getIntakeSteps,
+  JURISDICTION_LABELS,
+  resolvePsychosocialJurisdiction
+} from "@/lib/psychosocialEditions";
 import { getValueByPath, isMeaningfulValue } from "@/lib/packetUtils";
 import {
   CREATOR_CREDIT,
@@ -13,7 +17,11 @@ import {
   PRODUCT_NAME,
   UNSAVED_WARNING
 } from "@/lib/placeholders";
-import type { IntakePacket, IntakeStep } from "@/types/intake";
+import type {
+  IntakePacket,
+  IntakeStep,
+  PsychosocialJurisdiction
+} from "@/types/intake";
 import { ExportButtons } from "./ExportButtons";
 import { FormSection } from "./FormSection";
 import { IntakeStepper } from "./IntakeStepper";
@@ -27,6 +35,7 @@ type IntakeAppProps = {
   demonstrationLoaded?: boolean;
   initialPacket?: IntakePacket;
   initialStepIndex?: number;
+  jurisdiction?: PsychosocialJurisdiction;
 };
 
 export function IntakeApp({
@@ -34,13 +43,23 @@ export function IntakeApp({
   autoPrint = false,
   demonstrationLoaded = false,
   initialPacket,
-  initialStepIndex = 0
+  initialStepIndex = 0,
+  jurisdiction
 }: IntakeAppProps) {
-  const initialIndex = Math.min(Math.max(initialStepIndex, 0), INTAKE_STEPS.length);
+  const activeJurisdiction =
+    jurisdiction ?? resolvePsychosocialJurisdiction(initialPacket);
+  const intakeSteps = useMemo(
+    () => getIntakeSteps(activeJurisdiction),
+    [activeJurisdiction]
+  );
+  const initialIndex = Math.min(Math.max(initialStepIndex, 0), intakeSteps.length);
   const [activeIndex, setActiveIndex] = useState(initialIndex);
   const formDefaults = useMemo(
-    () => clonePacket(initialPacket ?? defaultValues),
-    [initialPacket]
+    () => ({
+      ...clonePacket(initialPacket ?? defaultValues),
+      jurisdiction: activeJurisdiction
+    }),
+    [activeJurisdiction, initialPacket]
   );
   const methods = useForm<IntakePacket>({
     defaultValues: formDefaults,
@@ -51,17 +70,17 @@ export function IntakeApp({
   const completedStepIds = useMemo(() => {
     const packet = watchedPacket ?? methods.getValues();
     return new Set(
-      INTAKE_STEPS.filter((step) => isStepStarted(step, packet)).map(
+      intakeSteps.filter((step) => isStepStarted(step, packet)).map(
         (step) => step.id
       )
     );
-  }, [watchedPacket, methods]);
+  }, [watchedPacket, methods, intakeSteps]);
 
   const hasEnteredInfo = completedStepIds.size > 0;
-  const isReview = activeIndex === INTAKE_STEPS.length;
-  const activeStep = INTAKE_STEPS[activeIndex];
+  const isReview = activeIndex === intakeSteps.length;
+  const activeStep = intakeSteps[activeIndex];
   const completionPercent = Math.round(
-    (completedStepIds.size / INTAKE_STEPS.length) * 100
+    (completedStepIds.size / intakeSteps.length) * 100
   );
 
   useEffect(() => {
@@ -88,7 +107,7 @@ export function IntakeApp({
   }, [autoPrint]);
 
   function clear() {
-    methods.reset(clonePacket(defaultValues));
+    methods.reset({ ...clonePacket(defaultValues), jurisdiction: activeJurisdiction });
     setActiveIndex(0);
   }
 
@@ -100,7 +119,7 @@ export function IntakeApp({
 
   function goNext() {
     setActiveIndex((current) =>
-      Math.min(current + 1, INTAKE_STEPS.length)
+      Math.min(current + 1, intakeSteps.length)
     );
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -136,6 +155,9 @@ export function IntakeApp({
               <h1 className="mt-2 text-2xl font-bold tracking-normal">
                 No-retention digital intake packet
               </h1>
+              <p className="mt-1 text-sm font-bold text-sea">
+                {JURISDICTION_LABELS[activeJurisdiction]}
+              </p>
               <p className="mt-1 text-sm font-semibold text-[#52645f]">
                 {CREATOR_CREDIT}
               </p>
@@ -204,11 +226,11 @@ export function IntakeApp({
               </p>
             </div>
             <IntakeStepper
-              steps={INTAKE_STEPS}
+              steps={intakeSteps}
               activeIndex={activeIndex}
               completedStepIds={completedStepIds}
               onStepChange={setActiveIndex}
-              onReview={() => setActiveIndex(INTAKE_STEPS.length)}
+              onReview={() => setActiveIndex(intakeSteps.length)}
             />
           </aside>
 
@@ -234,7 +256,7 @@ export function IntakeApp({
               <button
                 type="button"
                 onClick={goNext}
-                disabled={activeIndex === INTAKE_STEPS.length}
+                disabled={activeIndex === intakeSteps.length}
                 className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-sea px-4 py-2 font-bold text-white transition hover:bg-[#0b615b] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Next

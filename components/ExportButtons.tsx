@@ -10,6 +10,7 @@ import {
 import type { IntakePacket } from "@/types/intake";
 import { buildPacketPdf, downloadBytes } from "@/lib/pdfExport";
 import { EXPORT_PRIVACY_NOTICE, UNSAVED_WARNING } from "@/lib/placeholders";
+import { resolvePsychosocialJurisdiction } from "@/lib/psychosocialEditions";
 
 type ExportButtonsProps = {
   getPacket: () => IntakePacket;
@@ -27,8 +28,10 @@ export function ExportButtons({
     setMessages([]);
     setBusy("draft");
     try {
-      const bytes = await buildPacketPdf(getPacket(), "draft");
-      downloadBytes(bytes, "adult-day-intake-editable-draft.pdf");
+      const packet = getPacket();
+      const bytes = await buildPacketPdf(packet, "draft");
+      const edition = resolvePsychosocialJurisdiction(packet).toLowerCase();
+      downloadBytes(bytes, `adult-day-intake-${edition}-editable-draft.pdf`);
     } catch {
       setMessages([
         "Editable Draft PDF could not be generated. Please try again, or use Print to save a PDF while the entry remains open."
@@ -45,7 +48,8 @@ export function ExportButtons({
     setBusy("final");
     try {
       const bytes = await buildPacketPdf(packet, "final");
-      downloadBytes(bytes, "adult-day-intake-final-packet.pdf");
+      const edition = resolvePsychosocialJurisdiction(packet).toLowerCase();
+      downloadBytes(bytes, `adult-day-intake-${edition}-final-packet.pdf`);
     } catch {
       setMessages([
         "Final PDF could not be generated. Please try again, or use Print to save the packet as a PDF while the entry remains open."

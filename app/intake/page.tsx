@@ -1,10 +1,16 @@
-import { IntakeApp } from "@/components/IntakeApp";
-import { ProtectedAccess } from "@/components/auth/ProtectedAccess";
+import { Suspense } from "react";
+import { PsychosocialIntakeAccess } from "@/components/PsychosocialIntakeAccess";
 
 export default function IntakePage() {
   return (
-    <ProtectedAccess>
-      <IntakeApp />
-    </ProtectedAccess>
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-cloud p-8 text-ink">
+          Loading protected intake edition...
+        </main>
+      }
+    >
+      <PsychosocialIntakeAccess />
+    </Suspense>
   );
 }

@@ -13,6 +13,7 @@ import type {
   WorkflowAccess,
   WorkflowProduct
 } from "@/lib/access/sharedSuiteRules";
+import type { PsychosocialJurisdiction } from "@/types/intake";
 
 const CURRENT_PRODUCT: WorkflowProduct = "psychosocial";
 
@@ -21,6 +22,7 @@ export type ActiveAccessDetails = {
   isOwner: boolean;
   organizationName: string | null;
   organizationRole: "facility_admin" | "staff" | null;
+  psychosocialJurisdictions: PsychosocialJurisdiction[];
   subscriptionPlan: SubscriptionPlan | null;
   workflowAccess: WorkflowAccess;
 };
@@ -97,6 +99,7 @@ export function ProtectedAccess({ children }: ProtectedAccessProps) {
       isOwner?: boolean;
       organizationName?: string | null;
       organizationRole?: "facility_admin" | "staff" | null;
+      psychosocialJurisdictions?: PsychosocialJurisdiction[];
       subscriptionPlan?: SubscriptionPlan | null;
       workflowAccess?: WorkflowAccess;
       requiresLegalAcceptance?: boolean;
@@ -123,6 +126,10 @@ export function ProtectedAccess({ children }: ProtectedAccessProps) {
             isOwner: data.isOwner === true,
             organizationName: data.organizationName ?? null,
             organizationRole: data.organizationRole ?? null,
+            psychosocialJurisdictions:
+              data.psychosocialJurisdictions?.length
+                ? data.psychosocialJurisdictions
+                : ["NJ"],
             subscriptionPlan: data.subscriptionPlan ?? null,
             workflowAccess
           }

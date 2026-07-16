@@ -166,6 +166,29 @@ export function FieldInput({ field }: { field: FieldDefinition }) {
     );
   }
 
+  if (kind === "select") {
+    return (
+      <label className={className} htmlFor={inputId}>
+        <span className={`field-label ${field.required ? "required-dot" : ""}`}>
+          {field.label}
+        </span>
+        <select id={inputId} className="field-input" {...registration}>
+          <option value="">Select an option</option>
+          {field.options?.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        {field.helpText ? (
+          <span className="mt-2 block text-sm text-[#667873]">
+            {field.helpText}
+          </span>
+        ) : null}
+      </label>
+    );
+  }
+
   return (
     <label className={className} htmlFor={inputId}>
       <span className={`field-label ${field.required ? "required-dot" : ""}`}>

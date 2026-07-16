@@ -3,6 +3,7 @@
 import type { IntakeStep } from "@/types/intake";
 import { FieldInput } from "./FieldInput";
 import { MentalStatusScreening } from "./MentalStatusScreening";
+import { MARYLAND_OFFICIAL_RESOURCES } from "@/lib/psychosocialEditions";
 
 export function FormSection({ step }: { step: IntakeStep }) {
   if (step.custom === "mental-status") {
@@ -22,6 +23,8 @@ export function FormSection({ step }: { step: IntakeStep }) {
           {step.description}
         </p>
       </div>
+
+      {step.id === "maryland-admission" ? <MarylandResourceNotice /> : null}
 
       {step.fields ? (
         <div className="form-grid">
@@ -50,5 +53,37 @@ export function FormSection({ step }: { step: IntakeStep }) {
         </div>
       ))}
     </section>
+  );
+}
+
+function MarylandResourceNotice() {
+  return (
+    <aside className="mb-6 rounded-lg border border-[#cde7df] bg-mint p-4 text-sm leading-6 text-[#334642]">
+      <p className="font-bold text-sea">Official Maryland resources</p>
+      <p className="mt-1">
+        Use the current Maryland forms maintained by the State. This workflow
+        tracks completion and does not reproduce or replace required government
+        forms.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
+        <a className="font-bold text-sea underline" href={MARYLAND_OFFICIAL_RESOURCES.adultMedicalDayCare} target="_blank" rel="noreferrer">
+          Adult Medical Day Care resources
+        </a>
+        <a className="font-bold text-sea underline" href={MARYLAND_OFFICIAL_RESOURCES.medicalDayCareServices} target="_blank" rel="noreferrer">
+          Medical Day Care forms
+        </a>
+        <a className="font-bold text-sea underline" href={MARYLAND_OFFICIAL_RESOURCES.regulations} target="_blank" rel="noreferrer">
+          COMAR 10.12 regulations
+        </a>
+        <a className="font-bold text-sea underline" href={MARYLAND_OFFICIAL_RESOURCES.adcaps} target="_blank" rel="noreferrer">
+          Official ADCAPS form (RN completion required)
+        </a>
+      </div>
+      <p className="mt-3 font-semibold">
+        ADCAPS must be completed by a registered nurse. Psychosocial staff may
+        contribute social history, home-environment, goals, referrals, and team
+        planning information only within their credentials and agency policy.
+      </p>
+    </aside>
   );
 }

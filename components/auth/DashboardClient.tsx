@@ -23,6 +23,10 @@ export function DashboardClient() {
 function DashboardContent({ access }: { access: ActiveAccessDetails }) {
   const hasBothWorkflows =
     access.workflowAccess.psychosocial && access.workflowAccess.nursing;
+  const psychosocialJurisdictions = access.psychosocialJurisdictions.length
+    ? access.psychosocialJurisdictions
+    : (["NJ"] as const);
+  const hasMultiplePsychosocialEditions = psychosocialJurisdictions.length > 1;
 
   return (
       <main className="min-h-screen bg-cloud text-ink">
@@ -49,13 +53,18 @@ function DashboardContent({ access }: { access: ActiveAccessDetails }) {
             <div className="mt-7 flex flex-wrap gap-3">
               {access.workflowAccess.psychosocial ? (
                 <>
-                  <Link
-                    className="inline-flex min-h-12 items-center gap-2 rounded-lg bg-sea px-5 py-3 font-bold text-white shadow-soft transition hover:bg-[#0b615b]"
-                    href="/intake"
-                  >
-                    Start Psychosocial Intake
-                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                  </Link>
+                  {psychosocialJurisdictions.map((jurisdiction) => (
+                    <Link
+                      key={jurisdiction}
+                      className="inline-flex min-h-12 items-center gap-2 rounded-lg bg-sea px-5 py-3 font-bold text-white shadow-soft transition hover:bg-[#0b615b]"
+                      href={`/intake?edition=${jurisdiction}`}
+                    >
+                      {hasMultiplePsychosocialEditions
+                        ? `Start ${jurisdiction === "MD" ? "Maryland" : "New Jersey"} Psychosocial Intake`
+                        : "Start Psychosocial Intake"}
+                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    </Link>
+                  ))}
                   <Link
                     className="inline-flex min-h-12 items-center rounded-lg border border-[#b9c7c3] bg-white px-5 py-3 font-bold text-ink transition hover:border-sea"
                     href="/example"

@@ -4,19 +4,26 @@ import { useState } from "react";
 import Link from "next/link";
 import { Download, FileText, Printer } from "lucide-react";
 import { buildPacketPdf, downloadBytes } from "@/lib/pdfExport";
-import { examplePacket } from "@/lib/examplePacket";
+import { examplePacket, marylandExamplePacket } from "@/lib/examplePacket";
+import type { PsychosocialJurisdiction } from "@/types/intake";
 
-export function OwnerExportTestPanel() {
+export function OwnerExportTestPanel({
+  jurisdiction
+}: {
+  jurisdiction: PsychosocialJurisdiction;
+}) {
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const packet = jurisdiction === "MD" ? marylandExamplePacket : examplePacket;
+  const editionName = jurisdiction === "MD" ? "Maryland" : "New Jersey";
 
   async function testDraftPdf() {
     setMessage(null);
     setBusy("draft");
     try {
-      const bytes = await buildPacketPdf(examplePacket, "draft");
-      downloadBytes(bytes, "owner-test-editable-draft.pdf");
-      setMessage("Editable draft PDF test generated with fictitious demonstration data.");
+      const bytes = await buildPacketPdf(packet, "draft");
+      downloadBytes(bytes, `owner-test-${jurisdiction.toLowerCase()}-editable-draft.pdf`);
+      setMessage(`${editionName} editable draft PDF generated with fictitious demonstration data.`);
     } catch {
       setMessage("Editable draft PDF test could not be generated.");
     } finally {
@@ -28,9 +35,9 @@ export function OwnerExportTestPanel() {
     setMessage(null);
     setBusy("final");
     try {
-      const bytes = await buildPacketPdf(examplePacket, "final");
-      downloadBytes(bytes, "owner-test-final-packet.pdf");
-      setMessage("Final PDF test generated with fictitious demonstration data.");
+      const bytes = await buildPacketPdf(packet, "final");
+      downloadBytes(bytes, `owner-test-${jurisdiction.toLowerCase()}-final-packet.pdf`);
+      setMessage(`${editionName} final PDF generated with fictitious demonstration data.`);
     } catch {
       setMessage("Final PDF test could not be generated.");
     } finally {
@@ -44,7 +51,7 @@ export function OwnerExportTestPanel() {
         Export Testing
       </h2>
       <p className="mt-2 leading-7 text-[#52645f]">
-        These owner-only test buttons use the existing production export logic
+        These owner-only {editionName} test buttons use the existing production export logic
         with fictional demonstration data. No client/member responses are
         stored.
       </p>
@@ -68,7 +75,7 @@ export function OwnerExportTestPanel() {
           {busy === "final" ? "Preparing..." : "Test Final PDF"}
         </button>
         <Link
-          href="/owner/intake?mode=review&demo=1&print=1"
+          href={`/owner/intake?mode=review&demo=1&print=1&edition=${jurisdiction}`}
           className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[#b9c7c3] bg-white px-4 py-2 text-sm font-bold text-ink transition hover:border-sea"
         >
           <Printer className="h-4 w-4" aria-hidden="true" />

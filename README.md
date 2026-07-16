@@ -7,7 +7,8 @@ Created by Marvin Miles, LSW.
 ## What is included
 
 - Responsive landing page for the digital product.
-- 18-step intake workflow covering company setup plus PDF packet output structure.
+- Protected 18-step New Jersey intake workflow covering company setup plus PDF packet output structure.
+- Conditional Maryland Psychosocial Edition that mirrors the baseline and adds a Maryland admission-document and coordination addendum.
 - No-retention active browser session workflow.
 - Download Editable Draft PDF.
 - Review screen.
@@ -31,6 +32,21 @@ This is a privacy-conscious/no-retention workflow design, not a HIPAA compliance
 ## Editable draft PDF behavior
 
 The app uses local PDF export only and does not save drafts internally. Editable Draft PDF behavior may vary by PDF viewer. Adobe Acrobat Reader is recommended for completing or revising downloaded editable draft PDFs. Checkbox, multiple-choice, and scoring responses include readable selected-answer summaries to preserve clarity across PDF viewers.
+
+## State editions
+
+The New Jersey Psychosocial Edition remains the protected 18-step baseline. Legacy packets and access records without a jurisdiction value resolve to New Jersey.
+
+The Maryland Psychosocial Edition reuses the clinically equivalent baseline sections and adds a Maryland-only admission-document and coordination addendum. The addendum tracks the preadmission assessment, service contract, participant rights, home-environment assessment, Maryland social-work credential, referrals, multidisciplinary participation, official Maryland forms, and discharge documentation. It does not reproduce official government forms and does not represent a social worker as completing the RN-only ADCAPS or nursing plan of care.
+
+Current official Maryland references used for the addendum:
+
+- [Maryland Adult Medical Day Care Resources](https://health.maryland.gov/ohcq/Pages/Adult-Medical-Day-Care-Resources.aspx)
+- [Maryland Medical Day Care Services and Forms](https://health.maryland.gov/mmcp/longtermcare/Pages/Medical-Day-Care-Services.aspx?Mobile=1)
+- [COMAR 10.12](https://regs.maryland.gov/us/md/exec/comar/10.12/index.full.html)
+- [Maryland Board of Social Work Examiners license roster](https://health.maryland.gov/bswe/Pages/Roster.aspx)
+
+Maryland facilities should have counsel, compliance staff, and clinical leadership review the edition against the facility's license category, payer requirements, current State forms, and agency policy before production use.
 
 ## Standard Agency Access - $487 Upfront Access Fee + $19/Month
 

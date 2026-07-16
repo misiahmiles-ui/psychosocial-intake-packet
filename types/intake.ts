@@ -55,7 +55,10 @@ export type MentalStatusResponse = {
   notes: string;
 };
 
+export type PsychosocialJurisdiction = "NJ" | "MD";
+
 export type IntakePacket = {
+  jurisdiction?: PsychosocialJurisdiction;
   company: {
     name: string;
     logoUrl: string;
@@ -132,4 +135,36 @@ export type IntakePacket = {
     [key: string]: string | string[];
   };
   therapy: Record<string, string | boolean>;
+  maryland: {
+    admissionDocuments: string[];
+    officialForms: string[];
+    preadmissionAssessmentDate: string;
+    preadmissionAssessmentStatus: string;
+    serviceContractStatus: string;
+    participantRightsStatus: string;
+    participantRightsLanguage: string;
+    homeEnvironmentAssessmentDate: string;
+    homeEnvironmentAssessmentStatus: string;
+    socialWorkConsultationStatus: string;
+    socialWorkConsultationDate: string;
+    socialWorkerCredential: string;
+    socialWorkerLicenseNumber: string;
+    adcapsTrackingStatus: string;
+    adcapsCompletionDate: string;
+    adcapsNextReviewDate: string;
+    adcapsRegisteredNurse: string;
+    significantChangeDate: string;
+    significantChangeReassessmentStatus: string;
+    planOfCareCoordinationStatus: string;
+    planOfCareCompletionDate: string;
+    planOfCareNextReviewDate: string;
+    planOfCareStatusChangeDate: string;
+    planOfCareUpdateDate: string;
+    multidisciplinaryMeetingDate: string;
+    psychosocialContribution: string;
+    dischargeNoticeDate: string;
+    dischargeException: string;
+    dischargeReason: string;
+    notes: string;
+  };
 };

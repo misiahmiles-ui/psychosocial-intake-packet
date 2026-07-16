@@ -15,6 +15,7 @@ import type {
   WorkflowProduct
 } from "@/lib/access/sharedSuiteRules";
 import { hasCurrentLegalAcceptance } from "@/lib/legal/acceptance";
+import { normalizeAuthorizedJurisdictions } from "@/lib/access/psychosocialJurisdictions";
 
 const CURRENT_PRODUCT: WorkflowProduct = "psychosocial";
 
@@ -142,6 +143,11 @@ export async function GET(request: Request) {
   const workflowAccess: WorkflowAccess = ownerAuthorization.isOwner
     ? { nursing: true, psychosocial: true }
     : sharedAccess?.workflowAccess ?? legacyWorkflowAccess(legacyHasAccess);
+  const psychosocialJurisdictions = normalizeAuthorizedJurisdictions(
+    appMetadata.psychosocial_jurisdictions ??
+      appMetadata.psychosocial_jurisdiction,
+    ownerAuthorization.isOwner
+  );
 
   return NextResponse.json({
     accessRole: ownerAuthorization.accountRole,
@@ -156,6 +162,7 @@ export async function GET(request: Request) {
     organizationId: sharedAccess?.organizationId ?? null,
     organizationName: sharedAccess?.organizationName ?? null,
     organizationRole: sharedAccess?.organizationRole ?? null,
+    psychosocialJurisdictions,
     seatLimits: sharedAccess?.seatLimits ?? null,
     subscriptionPlan: sharedAccess?.subscriptionPlan ?? null,
     username: profile?.username ?? userMetadata.username ?? null,

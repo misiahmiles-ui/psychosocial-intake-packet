@@ -22,6 +22,7 @@ const mentalStatusResponses: MentalStatusResponse[] = mentalStatusQuestions.map(
 );
 
 export const defaultValues: IntakePacket = {
+  jurisdiction: "NJ",
   company: {
     name: "",
     logoUrl: "",
@@ -282,5 +283,37 @@ export const defaultValues: IntakePacket = {
     clientName: "",
     representativeSignature: "",
     date: ""
+  },
+  maryland: {
+    admissionDocuments: [],
+    officialForms: [],
+    preadmissionAssessmentDate: "",
+    preadmissionAssessmentStatus: "",
+    serviceContractStatus: "",
+    participantRightsStatus: "",
+    participantRightsLanguage: "",
+    homeEnvironmentAssessmentDate: "",
+    homeEnvironmentAssessmentStatus: "",
+    socialWorkConsultationStatus: "",
+    socialWorkConsultationDate: "",
+    socialWorkerCredential: "",
+    socialWorkerLicenseNumber: "",
+    adcapsTrackingStatus: "",
+    adcapsCompletionDate: "",
+    adcapsNextReviewDate: "",
+    adcapsRegisteredNurse: "",
+    significantChangeDate: "",
+    significantChangeReassessmentStatus: "",
+    planOfCareCoordinationStatus: "",
+    planOfCareCompletionDate: "",
+    planOfCareNextReviewDate: "",
+    planOfCareStatusChangeDate: "",
+    planOfCareUpdateDate: "",
+    multidisciplinaryMeetingDate: "",
+    psychosocialContribution: "",
+    dischargeNoticeDate: "",
+    dischargeException: "",
+    dischargeReason: "",
+    notes: ""
   }
 };
