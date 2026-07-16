@@ -203,6 +203,9 @@ export function AdultDayIntakeProMarketing() {
           <h2 className="mt-3 text-3xl font-bold tracking-normal text-[#174f80]">
             Three purchasing choices
           </h2>
+          <p className="mt-4 rounded-lg border border-[#bfd8cf] bg-[#eef8f4] px-4 py-3 text-sm font-bold leading-6 text-[#315d4b]">
+            Available in New Jersey and Maryland editions. Select your facility&apos;s state during account setup. The price is the same for either edition.
+          </p>
           <div className="mt-8 grid gap-5 lg:grid-cols-3">
             <article className="rounded-xl border border-[#eadad2] bg-white p-6">
               <h3 className="text-xl font-bold">Psychosocial Intake</h3>
