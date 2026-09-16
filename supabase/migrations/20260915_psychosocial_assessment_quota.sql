@@ -4,11 +4,11 @@ create table if not exists public.psychosocial_assessment_generation_events (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   quota_month text not null check (quota_month ~ '^\d{4}-\d{2}$'),
-  status text not null check (status in ('reserved', 'completed')),
+  status text not null check (status in ('reserved', 'completed', 'released')),
   reserved_at timestamptz not null default now(),
   completed_at timestamptz,
   check (
-    (status = 'reserved' and completed_at is null)
+    (status in ('reserved', 'released') and completed_at is null)
     or (status = 'completed' and completed_at is not null)
   )
 );
@@ -54,6 +54,11 @@ begin
   perform pg_advisory_xact_lock(hashtextextended(p_user_id::text || ':' || p_month, 0));
 
   delete from public.psychosocial_assessment_generation_events
+  where status = 'released'
+    and reserved_at < now() - interval '7 days';
+
+  update public.psychosocial_assessment_generation_events
+  set status = 'released'
   where user_id = p_user_id
     and status = 'reserved'
     and reserved_at < now() - make_interval(secs => p_reservation_ttl_seconds);
@@ -166,7 +171,8 @@ language sql
 security definer
 set search_path = public
 as $$
-  delete from public.psychosocial_assessment_generation_events
+  update public.psychosocial_assessment_generation_events
+  set status = 'released'
   where id = p_reservation_id
     and user_id = p_user_id
     and status = 'reserved';

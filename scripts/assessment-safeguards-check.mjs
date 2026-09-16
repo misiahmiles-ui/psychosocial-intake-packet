@@ -152,13 +152,18 @@ test("future and invalid dates do not create age facts", () => {
 for (const [name, value, kind] of [
   ["email", "contact jane@example.com", "email"],
   ["telephone", "call 201-555-0199", "telephone"],
+  ["telephone without separators", "call 2015550199", "telephone"],
   ["SSN", "SSN 123-45-6789", "ssn"],
+  ["SSN fragment", "SSN last 4: 6789", "ssn"],
   ["full date", "born 1970-09-20", "full_date"],
+  ["written full date", "visit September 15, 2026", "full_date"],
   ["ZIP code", "ZIP 07001", "postal_code"],
+  ["county", "Services are provided in Essex County", "sub_state_geography"],
   ["street address", "12 Main Street", "street_address"],
   ["URL", "see https://example.com/patient", "url"],
   ["IP address", "source 192.168.1.10", "ip_address"],
-  ["record identifier", "medical record number AB-12345", "record_identifier"]
+  ["record identifier", "medical record number AB-12345", "record_identifier"],
+  ["biometric identifier", "fingerprint identifier BIO-12345", "record_identifier"]
 ]) {
   test(`${name} is a hard-block PHI finding`, () => {
     const findings = findingFor(value);
@@ -169,6 +174,11 @@ for (const [name, value, kind] of [
 test("a name embedded in narrative text is an ambiguous finding", () => {
   const findings = findingFor("Support is provided by Jane Sample each evening.");
   assert.ok(findings.some((item) => item.kind === "person_name" && item.severity === "ambiguous"));
+});
+
+test("a role followed by a full name is scanned as one complete ambiguous span", () => {
+  const findings = findingFor("Caregiver Jane Sample requested transportation.");
+  assert.ok(findings.some((item) => item.detectedText === "Caregiver Jane Sample"));
 });
 
 test("ambiguous name review is scoped by fact and character coordinates", () => {
@@ -271,6 +281,21 @@ test("historical source cannot become current", () => {
   assert.equal(assessment.validateClaims([claim(source, { temporalStatus: "current" })], [source]).valid, false);
 });
 
+test("unknown and not-applicable semantic values cannot bypass source support", () => {
+  const source = fact();
+  assert.equal(assessment.validateClaims([claim(source, { polarity: "unknown" })], [source]).valid, false);
+  assert.equal(assessment.validateClaims([claim(source, { riskStatus: "not_applicable", temporalStatus: "not_applicable" })], [source]).valid, false);
+});
+
+test("a denied documented-diagnosis field remains no diagnosis", () => {
+  const input = packet();
+  input.medicalHistory.majorMedicalDiagnoses = "No diagnosis documented";
+  const source = assessment.createAssessmentWorkspace(input, "NJ").facts.find((item) => item.normalizedValue === "No diagnosis documented");
+  assert.equal(source.semantics.polarity, "denied");
+  assert.equal(source.semantics.diagnosisStatus, "none");
+  assert.equal(assessment.validateClaims([claim(source)], [source]).valid, true);
+});
+
 test("participant report cannot become clinician observation", () => {
   const source = fact({ sourceType: "participant_report" });
   assert.equal(assessment.validateClaims([claim(source, { sourceType: "clinician_observation" })], [source]).valid, false);
@@ -300,6 +325,18 @@ test("screening result cannot become a diagnosis", () => {
   assert.equal(result.valid, false);
 });
 
+test("a symptom or concern cannot become a diagnosis", () => {
+  const source = fact({
+    normalizedValue: "Participant reports anxiety symptoms.",
+    semantics: semantic({ diagnosisStatus: "symptom_or_concern" })
+  });
+  const result = assessment.validateClaims([claim(source, {
+    text: `${source.normalizedValue} This diagnoses anxiety.`
+  })], [source]);
+  assert.equal(result.valid, false);
+  assert.ok(result.issues.some((issue) => issue.includes("unsupported diagnostic statement")));
+});
+
 test("unvalidated parallel narrative is not part of the accepted request shape", () => {
   const source = fact();
   const request = { version: 1, jurisdiction: "NJ", facts: [source], reviewedAmbiguousFindings: [], narrative: "unsupported" };
@@ -317,6 +354,27 @@ test("critical present-versus-denied suicide conflict is detected", () => {
   const present = fact({ id: "fact-001", sourceField: "current-suicide-risk", normalizedValue: "Current suicide risk present", semantics: semantic({ riskStatus: "present" }) });
   const denied = fact({ id: "fact-002", sourceField: "current-suicide-risk", normalizedValue: "Current suicide risk denied", semantics: semantic({ polarity: "denied", riskStatus: "denied" }) });
   assert.equal(assessment.detectSafetyConflicts([present, denied]).length, 1);
+});
+
+test("natural-language safety denial remains denied and conflicts with a present risk", () => {
+  const input = packet();
+  input.medicalHistory.currentRiskDetails = "Current suicide risk present";
+  input.safety.harmRisk = "No current suicide risk";
+  const workspace = assessment.createAssessmentWorkspace(input, "NJ");
+  const denied = workspace.facts.find((item) => item.normalizedValue === "No current suicide risk");
+  assert.equal(denied.semantics.polarity, "denied");
+  assert.equal(denied.semantics.riskStatus, "denied");
+  assert.equal(workspace.conflicts.length, 1);
+});
+
+test("unknown and not-assessed qualifiers remain protected", () => {
+  const input = packet();
+  input.safety.harmRisk = "Unknown because collateral is unavailable";
+  input.safety.elopementRisk = "Not assessed during this visit";
+  const facts = assessment.createAssessmentWorkspace(input, "NJ").facts;
+  assert.equal(facts.find((item) => item.normalizedValue.startsWith("Unknown")).semantics.polarity, "unknown");
+  assert.equal(facts.find((item) => item.normalizedValue.startsWith("Not assessed")).semantics.polarity, "not_assessed");
+  assert.equal(facts.find((item) => item.normalizedValue.startsWith("Not assessed")).semantics.riskStatus, "not_assessed");
 });
 
 test("local safety resolution removes only the unselected temporary fact", () => {

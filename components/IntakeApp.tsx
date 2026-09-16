@@ -36,6 +36,7 @@ type IntakeAppProps = {
   accessMode?: IntakeAccessMode;
   autoPrint?: boolean;
   demonstrationLoaded?: boolean;
+  developmentAssessmentPreview?: "success" | "failure";
   initialPacket?: IntakePacket;
   initialStepIndex?: number;
   jurisdiction?: PsychosocialJurisdiction;
@@ -45,6 +46,7 @@ export function IntakeApp({
   accessMode = "standard",
   autoPrint = false,
   demonstrationLoaded = false,
+  developmentAssessmentPreview,
   initialPacket,
   initialStepIndex = 0,
   jurisdiction
@@ -260,6 +262,7 @@ export function IntakeApp({
                 <AssessmentWorkflow
                   acceptedAssessment={acceptedAssessment}
                   currentRevisionToken={currentAssessmentRevision}
+                  developmentPreview={developmentAssessmentPreview}
                   jurisdiction={activeJurisdiction}
                   onAccept={setAcceptedAssessment}
                   onReturnToIntake={() =>

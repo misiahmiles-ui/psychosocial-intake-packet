@@ -169,14 +169,15 @@ const PHI_PATTERNS: Array<{
   { kind: "url", pattern: /\b(?:https?:\/\/|www\.)[^\s]+/gi },
   { kind: "ip_address", pattern: /\b(?:\d{1,3}\.){3}\d{1,3}\b/g },
   { kind: "ssn", pattern: /\b(?:\d{3}[- ]?\d{2}[- ]?\d{4}|(?:ssn|social security)(?:\s*(?:last\s*4|number|no\.?|#))?\s*[:#-]?\s*\d{4,9})\b/gi },
-  { kind: "telephone", pattern: /(?<!\d)(?:\+?1[\s.-]?)?(?:\(\d{3}\)|\d{3})[\s.-]\d{3}[\s.-]\d{4}(?!\d)/g },
-  { kind: "full_date", pattern: /\b(?:19|20)\d{2}[-/]\d{1,2}[-/]\d{1,2}\b|\b\d{1,2}[/-]\d{1,2}[/-](?:19|20)?\d{2}\b/g },
+  { kind: "telephone", pattern: /(?<!\d)(?:\+?1[\s.-]?)?(?:\(\d{3}\)|\d{3})[\s.-]?\d{3}[\s.-]?\d{4}(?!\d)/g },
+  { kind: "full_date", pattern: /\b(?:19|20)\d{2}[-/]\d{1,2}[-/]\d{1,2}\b|\b\d{1,2}[/-]\d{1,2}[/-](?:19|20)?\d{2}\b|\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2}(?:st|nd|rd|th)?,?\s+(?:19|20)\d{2}\b|\b\d{1,2}\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(?:19|20)\d{2}\b/gi },
   { kind: "postal_code", pattern: /\b\d{5}(?:-\d{4})?\b/g },
+  { kind: "sub_state_geography", pattern: /\b[A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){0,2}\s+County\b/g },
   { kind: "street_address", pattern: /\b\d{1,6}\s+(?:[A-Z0-9.'-]+\s+){0,5}(?:street|st\.?|avenue|ave\.?|road|rd\.?|boulevard|blvd\.?|lane|ln\.?|drive|dr\.?|court|ct\.?|parkway|pkwy\.?|highway|hwy\.?)\b/gi },
-  { kind: "record_identifier", pattern: /\b(?:medicaid|medicare|health\s*plan|member|medical\s*record|mrn|account|policy|certificate|license|device|vehicle)(?:\s*(?:id|identifier|number|no\.?|#))?\s*[:#-]?\s*[A-Z0-9][A-Z0-9-]{3,}\b/gi }
+  { kind: "record_identifier", pattern: /\b(?:medicaid|medicare|health\s*plan|member|medical\s*record|mrn|account|policy|certificate|license|device|vehicle|biometric|fingerprint|retinal|voiceprint|photograph|photo)(?:\s*(?:id|identifier|number|no\.?|#))?\s*[:#-]?\s*[A-Z0-9][A-Z0-9-]{3,}\b/gi }
 ];
 
-const PERSON_NAME_PATTERN = /\b(?:Dr\.?|Mr\.?|Mrs\.?|Ms\.?|Miss)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b|\b[A-Z][a-z]{2,}\s+[A-Z][a-z]{2,}\b/g;
+const PERSON_NAME_PATTERN = /\b(?:Dr\.?|Mr\.?|Mrs\.?|Ms\.?|Miss)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3}\b|\b(?:[A-Z][a-z]{2,}\s+){1,3}[A-Z][a-z]{2,}\b/g;
 const NAME_EXCLUSIONS = new Set([
   "Adult Day",
   "Assisted Living",
@@ -614,34 +615,40 @@ function deriveSemantics(path: string, value: string, domain: FactDomain): FactS
   const lower = value.toLowerCase();
   const polarity = inferPolarity(value);
   const diagnosisStatus = path === "medicalHistory.majorMedicalDiagnoses" || path === "medicalHistory.psychiatricDiagnoses"
-    ? "documented_diagnosis"
+    ? polarity === "denied" || polarity === "not_applicable"
+      ? "none"
+      : polarity === "unknown" || polarity === "not_assessed"
+        ? "unknown"
+        : "documented_diagnosis"
     : domain === "cognitive_screening"
       ? "screening_finding"
+      : polarity === "unknown" || polarity === "not_assessed"
+        ? "unknown"
       : /symptom|concern|mood|thought|behavior|memory/.test(`${path} ${lower}`)
         ? "symptom_or_concern"
         : "not_applicable";
   const relationshipStatus = /living|household|caregiver|support|family/.test(path.toLowerCase())
-    ? polarity === "denied" ? "absent" : polarity === "unknown" ? "unknown" : "present"
+    ? polarity === "denied" || polarity === "not_applicable" ? "absent" : polarity === "unknown" || polarity === "not_assessed" ? "unknown" : "present"
     : "not_applicable";
   const isRisk = domain === "safety" || /risk|fall|adherence/.test(path.toLowerCase());
   const riskStatus = isRisk
-    ? polarity === "denied" ? "denied" : polarity === "unknown" ? "unknown" : /history/.test(path.toLowerCase()) ? "historical" : /concern/.test(`${path} ${lower}`) ? "concern" : "present"
+    ? polarity === "denied" ? "denied" : polarity === "unknown" ? "unknown" : polarity === "not_assessed" ? "not_assessed" : polarity === "not_applicable" ? "not_applicable" : /history$/i.test(path) ? "historical" : /concern/.test(`${path} ${lower}`) ? "concern" : "present"
     : "not_applicable";
   const isFunctional = domain === "functional" || /mobility|adl|ambulation|transfer|shopping/.test(path.toLowerCase());
   const functionalStatus = isFunctional
-    ? /independent|without assistance|self/.test(lower) ? "independent" : /assist|help|supervis|depend|unable/.test(lower) ? "assistance_required" : /variable|fluctuat/.test(lower) ? "variable" : polarity === "unknown" ? "unknown" : "impaired"
+    ? /independent|without assistance|self/.test(lower) ? "independent" : /assist|help|supervis|depend|unable/.test(lower) ? "assistance_required" : /variable|fluctuat/.test(lower) ? "variable" : polarity === "unknown" || polarity === "not_assessed" ? "unknown" : polarity === "not_applicable" ? "not_applicable" : "impaired"
     : "not_applicable";
   const isSubstance = /substance|alcohol|druguse|drug-use|drug_use/.test(path.toLowerCase());
   const substanceUseStatus = isSubstance
-    ? polarity === "denied" ? "denied" : polarity === "unknown" ? "unknown" : /history|past|former/.test(`${path} ${lower}`) ? "historical" : /concern|misuse|problem/.test(lower) ? "concern" : "current"
+    ? polarity === "denied" ? "denied" : polarity === "unknown" ? "unknown" : polarity === "not_assessed" ? "not_assessed" : polarity === "not_applicable" ? "not_applicable" : /history|past|former/.test(`${path} ${lower}`) ? "historical" : /concern|misuse|problem/.test(lower) ? "concern" : "current"
     : "not_applicable";
   const isCaregiver = /caregiver|liveswith|household/.test(path.toLowerCase());
   const caregiverInvolvement = isCaregiver
-    ? /stress|strain|overwhelm/.test(`${path} ${lower}`) && polarity !== "denied" ? "strain_noted" : polarity === "denied" ? "absent" : polarity === "unknown" ? "unknown" : "active"
+    ? /stress|strain|overwhelm/.test(`${path} ${lower}`) && !["denied", "unknown", "not_assessed", "not_applicable"].includes(polarity) ? "strain_noted" : polarity === "denied" || polarity === "not_applicable" ? "absent" : polarity === "unknown" || polarity === "not_assessed" ? "unknown" : "active"
     : "not_applicable";
   const isService = domain === "goals_services" || domain === "discharge_planning" || /service|planofcare|levelofservice|referral/.test(path.toLowerCase());
   const serviceNeed = isService
-    ? polarity === "denied" ? "not_needed" : /consider|potential|project|may/.test(lower) ? "consider" : /progress|requested|pending/.test(lower) ? "in_progress" : polarity === "unknown" ? "unknown" : "needed"
+    ? polarity === "denied" || polarity === "not_applicable" ? "not_needed" : /consider|potential|project|may/.test(lower) ? "consider" : /progress|requested|pending/.test(lower) ? "in_progress" : polarity === "unknown" || polarity === "not_assessed" ? "unknown" : "needed"
     : "not_applicable";
   return {
     polarity,
@@ -657,9 +664,9 @@ function deriveSemantics(path: string, value: string, domain: FactDomain): FactS
 
 function inferPolarity(value: string) {
   const lower = value.trim().toLowerCase();
-  if (/^(unknown|unsure|not known)$/.test(lower)) return "unknown" as const;
-  if (/^(not assessed|not evaluated)$/.test(lower)) return "not_assessed" as const;
-  if (/^(no|denied|none|negative|not present)$/.test(lower) || /\bdenies?\b|\bno\s+(?:current\s+)?(?:risk|concern|history|use|falls?|ideation|attempts?)\b/.test(lower)) return "denied" as const;
+  if (/^(unknown|unsure|not known)\b/.test(lower)) return "unknown" as const;
+  if (/^(not assessed|not evaluated)\b/.test(lower)) return "not_assessed" as const;
+  if (/^(no|denied|none|negative|not present)\b/.test(lower) || /\bdenies?\b|\bno\s+(?:current\s+)?(?:risk|concern|history|use|falls?|ideation|attempts?)\b/.test(lower)) return "denied" as const;
   if (/^(not applicable|n\/a)$/.test(lower)) return "not_applicable" as const;
   return "affirmed" as const;
 }
@@ -743,7 +750,7 @@ function validateSemanticSupport(
   const issues: string[] = [];
   const temporal = new Set(sourceFacts.map((fact) => fact.temporalStatus));
   const sourceTypes = new Set(sourceFacts.map((fact) => fact.sourceType));
-  if (claim.temporalStatus !== "not_applicable" && !temporal.has(claim.temporalStatus)) {
+  if (!temporal.has(claim.temporalStatus)) {
     issues.push(`Claim ${index} changes the source temporal status.`);
   }
   if (claim.sourceType === "mixed") {
@@ -757,7 +764,6 @@ function validateSemanticSupport(
   ];
   axes.forEach((axis) => {
     const claimValue = axis === "polarity" ? claim.polarity : claim[axis];
-    if (claimValue === "not_applicable" || claimValue === "unknown") return;
     if (!sourceFacts.some((fact) => fact.semantics[axis] === claimValue)) {
       issues.push(`Claim ${index} has unsupported ${axis}.`);
     }
@@ -769,7 +775,9 @@ function validateSemanticSupport(
       issues.push(`Claim ${index} introduces unsupported numeric information.`);
     }
   });
-  if (/diagnos(?:is|ed)|meets?\s+criteria/i.test(claim.text)) {
+  const startsWithDiagnosticNegation = /^\s*(?:no|none|denied|without)\b/i.test(claim.text);
+  const usesAffirmativeDiagnosticLanguage = /\b(?:diagnoses?|diagnosed)(?:\s+with)?\b|\bdiagnosis\s+of\b|\bhas\s+(?:a\s+)?diagnosis\b|\bmeets?\s+criteria\b/i.test(claim.text);
+  if (usesAffirmativeDiagnosticLanguage && !startsWithDiagnosticNegation) {
     if (claim.diagnosisStatus !== "documented_diagnosis" || !sourceFacts.some((fact) => fact.semantics.diagnosisStatus === "documented_diagnosis")) {
       issues.push(`Claim ${index} makes an unsupported diagnostic statement.`);
     }

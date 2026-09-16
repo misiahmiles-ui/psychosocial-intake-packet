@@ -166,6 +166,7 @@ export type PhiFindingKind =
   | "ssn"
   | "full_date"
   | "postal_code"
+  | "sub_state_geography"
   | "street_address"
   | "url"
   | "ip_address"

@@ -26,6 +26,7 @@ import {
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import type {
   AcceptedAssessment,
+  AssessmentClaim,
   AssessmentFact,
   AssessmentRequest,
   LocalFactLabel,
@@ -44,6 +45,7 @@ type AssessmentWorkflowProps = {
   onAccept: (assessment: AcceptedAssessment) => void;
   onReturnToIntake: () => void;
   packet: IntakePacket;
+  developmentPreview?: "success" | "failure";
 };
 
 export function AssessmentWorkflow({
@@ -52,7 +54,8 @@ export function AssessmentWorkflow({
   jurisdiction,
   onAccept,
   onReturnToIntake,
-  packet
+  packet,
+  developmentPreview
 }: AssessmentWorkflowProps) {
   const [stage, setStage] = useState<WorkflowStage>("idle");
   const [facts, setFacts] = useState<AssessmentFact[]>([]);
@@ -61,6 +64,7 @@ export function AssessmentWorkflow({
   const [conflictChoices, setConflictChoices] = useState<Record<string, string>>({});
   const [replacements, setReplacements] = useState<Record<string, string>>({});
   const [generatedRevision, setGeneratedRevision] = useState("");
+  const [workspaceRevision, setWorkspaceRevision] = useState("");
   const [generatedText, setGeneratedText] = useState("");
   const [workingText, setWorkingText] = useState("");
   const [validation, setValidation] = useState<ValidatedAssessmentResponse["validation"] | null>(null);
@@ -77,6 +81,9 @@ export function AssessmentWorkflow({
     (conflict) => !conflict.factIds.includes(conflictChoices[conflict.id])
   );
   const stale = Boolean(generatedRevision && generatedRevision !== currentRevisionToken);
+  const workspaceIsStale = Boolean(
+    workspaceRevision && workspaceRevision !== currentRevisionToken
+  );
   const acceptedIsStale = Boolean(
     acceptedAssessment && acceptedAssessment.localRevisionToken !== currentRevisionToken
   );
@@ -89,6 +96,7 @@ export function AssessmentWorkflow({
     setReviewed([]);
     setConflictChoices({});
     setReplacements({});
+    setWorkspaceRevision(workspace.localRevisionToken);
     setMessage("");
     setStage("local-review");
   }
@@ -113,6 +121,10 @@ export function AssessmentWorkflow({
     setMessage("");
     if (!facts.length) {
       setMessage("Enter clinical intake information before generating an assessment.");
+      return;
+    }
+    if (workspaceIsStale) {
+      setMessage("Assessment-source intake fields changed. Refresh the privacy review from the current intake before generation.");
       return;
     }
     if (findings.length) {
@@ -143,6 +155,34 @@ export function AssessmentWorkflow({
     abortController.current = controller;
     setStage("generating");
     try {
+      if (process.env.NODE_ENV !== "production" && developmentPreview) {
+        await new Promise((resolve) => window.setTimeout(resolve, 900));
+        if (developmentPreview === "failure") {
+          throw new Error("Previewed generation failure. The intake remains available and no generation is consumed.");
+        }
+        const previewClaims = createDevelopmentClaims(outboundFacts);
+        const checked = validateClaims(previewClaims, outboundFacts);
+        const rendered = renderAssessmentFromClaims(checked.claims);
+        if (!checked.valid || !rendered) {
+          throw new Error("The development preview fixture failed validation.");
+        }
+        setGeneratedText(rendered);
+        setWorkingText(rendered);
+        setGeneratedRevision(workspaceRevision);
+        setValidation({
+          criticalUnresolvedConflicts: 0,
+          finalOutboundScan: "passed",
+          outputPhiScan: "passed",
+          preflightPhiScan: "passed",
+          safetyPreserved: "passed",
+          sourceFactsUsed: new Set(previewClaims.flatMap((item) => item.sourceFactIds)).size,
+          sourceGrounding: "passed",
+          unsupportedDiagnosisDetected: false
+        });
+        setUsage(null);
+        setStage("review");
+        return;
+      }
       const {
         data: { session }
       } = await createSupabaseBrowserClient().auth.getSession();
@@ -180,7 +220,7 @@ export function AssessmentWorkflow({
 
       setGeneratedText(rendered);
       setWorkingText(rendered);
-      setGeneratedRevision(currentRevisionToken);
+      setGeneratedRevision(workspaceRevision);
       setValidation(result.validation);
       setUsage(result.usage);
       setStage("review");
@@ -245,6 +285,7 @@ export function AssessmentWorkflow({
 
       {stage === "local-review" ? (
         <div className="mt-6 grid gap-5">
+          {workspaceIsStale ? <Notice tone="warning">Assessment-source intake fields changed after this temporary fact set was created. Refresh before transmitting anything.</Notice> : null}
           <PrivacyGate
             facts={facts}
             findings={findings}
@@ -263,10 +304,11 @@ export function AssessmentWorkflow({
             onChoose={(conflictId, factId) => setConflictChoices((current) => ({ ...current, [conflictId]: factId }))}
           />
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={generate} disabled={Boolean(findings.length || unresolvedConflicts.length || !facts.length)} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-sea px-4 py-2 font-bold text-white transition hover:bg-[#0b615b] disabled:cursor-not-allowed disabled:opacity-50">
+            <button type="button" onClick={generate} disabled={Boolean(workspaceIsStale || findings.length || unresolvedConflicts.length || !facts.length)} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-sea px-4 py-2 font-bold text-white transition hover:bg-[#0b615b] disabled:cursor-not-allowed disabled:opacity-50">
               <ShieldAlert className="h-4 w-4" aria-hidden="true" />
               Privacy Review Complete — Generate
             </button>
+            {workspaceIsStale ? <button type="button" onClick={beginLocalReview} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[#b9c7c3] bg-white px-4 py-2 font-bold text-ink hover:border-sea"><RotateCcw className="h-4 w-4" aria-hidden="true" /> Refresh Privacy Review from Current Intake</button> : null}
             <button type="button" onClick={onReturnToIntake} className="inline-flex min-h-11 items-center rounded-lg border border-[#b9c7c3] px-4 py-2 font-bold text-ink hover:border-sea">Return to Intake</button>
           </div>
         </div>
@@ -307,6 +349,44 @@ export function AssessmentWorkflow({
       ) : null}
     </section>
   );
+}
+
+function createDevelopmentClaims(facts: AssessmentFact[]): AssessmentClaim[] {
+  return facts.slice(0, 18).map((source, index) => ({
+    id: `claim-${index + 1}`,
+    section:
+      source.sourceField.includes("strengths-coping")
+        ? "strengths_protective"
+        : source.domain === "safety"
+          ? "safety"
+          : source.domain === "goals_services" || source.domain === "discharge_planning"
+            ? index % 2
+              ? "program_focus"
+              : "goals_barriers"
+            : source.domain === "participant_context"
+              ? "participant_context"
+              : source.domain === "living_support" || source.domain === "home_environment"
+                ? "living_support"
+                : source.domain === "functional" || source.domain === "cognitive_screening"
+                  ? "functional_cognitive"
+                  : source.domain === "communication"
+                    ? "communication_sensory"
+                    : source.domain === "medical" || source.domain === "nutrition_health"
+                      ? "medical_psychiatric"
+                      : "psychosocial_behavioral",
+    text: source.normalizedValue,
+    sourceFactIds: [source.id],
+    polarity: source.semantics.polarity,
+    temporalStatus: source.temporalStatus,
+    sourceType: source.sourceType,
+    diagnosisStatus: source.semantics.diagnosisStatus,
+    relationshipStatus: source.semantics.relationshipStatus,
+    riskStatus: source.semantics.riskStatus,
+    functionalStatus: source.semantics.functionalStatus,
+    substanceUseStatus: source.semantics.substanceUseStatus,
+    caregiverInvolvement: source.semantics.caregiverInvolvement,
+    serviceNeed: source.semantics.serviceNeed
+  }));
 }
 
 function PrivacyGate({
