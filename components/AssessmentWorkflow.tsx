@@ -493,16 +493,26 @@ function readSafeError(value: unknown) {
 function isValidatedResponse(value: unknown): value is ValidatedAssessmentResponse {
   if (!value || typeof value !== "object") return false;
   const result = value as Partial<ValidatedAssessmentResponse>;
+  const usage = result.usage;
   return Boolean(
     Array.isArray(result.claims) &&
     typeof result.assessmentText === "string" &&
     result.validation &&
-    result.usage &&
-    Number.isInteger(result.usage.includedQuantity) &&
-    Number.isInteger(result.usage.successfulGenerationsUsed) &&
-    Number.isInteger(result.usage.remainingGenerations) &&
-    typeof result.usage.entitlementStartsAt === "string" &&
-    typeof result.usage.entitlementExpiresAt === "string"
+    (usage === null || isAssessmentUsage(usage))
+  );
+}
+
+function isAssessmentUsage(
+  value: unknown
+): value is NonNullable<ValidatedAssessmentResponse["usage"]> {
+  if (!value || typeof value !== "object") return false;
+  const usage = value as Record<string, unknown>;
+  return (
+    Number.isInteger(usage.includedQuantity) &&
+    Number.isInteger(usage.successfulGenerationsUsed) &&
+    Number.isInteger(usage.remainingGenerations) &&
+    typeof usage.entitlementStartsAt === "string" &&
+    typeof usage.entitlementExpiresAt === "string"
   );
 }
 

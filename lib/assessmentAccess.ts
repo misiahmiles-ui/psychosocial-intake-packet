@@ -18,6 +18,7 @@ type AccessResult =
   | {
       authorized: true;
       entitlementActivation: AssessmentEntitlementActivation | null;
+      isOwner: boolean;
       userId: string;
     }
   | { authorized: false; error: string; status: number };
@@ -78,13 +79,6 @@ export async function authorizeAssessmentGeneration(
     )
     .eq("id", user.id)
     .maybeSingle<ProfileAccessRow>();
-  if (profileError) {
-    return {
-      authorized: false,
-      error: "Account access could not be verified.",
-      status: 503
-    };
-  }
 
   const appMetadata = user.app_metadata as Record<string, unknown>;
   const owner = resolveOwnerAuthorization({
@@ -95,7 +89,16 @@ export async function authorizeAssessmentGeneration(
     return {
       authorized: true,
       entitlementActivation: null,
+      isOwner: true,
       userId: user.id
+    };
+  }
+
+  if (profileError) {
+    return {
+      authorized: false,
+      error: "Account access could not be verified.",
+      status: 503
     };
   }
 
@@ -126,6 +129,7 @@ export async function authorizeAssessmentGeneration(
               ...sharedAccess.purchaseActivation
             }
           : null,
+        isOwner: false,
         userId: user.id
       };
     }
@@ -162,6 +166,7 @@ export async function authorizeAssessmentGeneration(
             userId: user.id
           }
         : null,
+    isOwner: false,
     userId: user.id
   };
 }

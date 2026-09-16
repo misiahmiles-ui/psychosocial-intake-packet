@@ -101,34 +101,36 @@ export async function POST(request: Request) {
   let reservationId: string | null = null;
   let completed = false;
   try {
-    const reservation = await reserveAssessmentGeneration(
-      access.userId,
-      access.entitlementActivation
-    );
-    if (!reservation.allowed || !reservation.reservationId) {
-      const denial = reservationDenial(reservation.reason);
-      return NextResponse.json(
-        {
-          error: denial.error,
-          code: reservation.reason,
-          usage: {
-            entitlementExpiresAt: reservation.entitlementExpiresAt,
-            entitlementStartsAt: reservation.entitlementStartsAt,
-            includedQuantity: reservation.includedQuantity,
-            remainingGenerations: reservation.remainingGenerations,
-            successfulGenerationsUsed: reservation.successfulGenerationsUsed
-          }
-        },
-        {
-          status: denial.status,
-          headers: {
-            ...NO_STORE_HEADERS,
-            ...(reservation.reason === "rapid_limit" ? { "Retry-After": "60" } : {})
-          }
-        }
+    if (!access.isOwner) {
+      const reservation = await reserveAssessmentGeneration(
+        access.userId,
+        access.entitlementActivation
       );
+      if (!reservation.allowed || !reservation.reservationId) {
+        const denial = reservationDenial(reservation.reason);
+        return NextResponse.json(
+          {
+            error: denial.error,
+            code: reservation.reason,
+            usage: {
+              entitlementExpiresAt: reservation.entitlementExpiresAt,
+              entitlementStartsAt: reservation.entitlementStartsAt,
+              includedQuantity: reservation.includedQuantity,
+              remainingGenerations: reservation.remainingGenerations,
+              successfulGenerationsUsed: reservation.successfulGenerationsUsed
+            }
+          },
+          {
+            status: denial.status,
+            headers: {
+              ...NO_STORE_HEADERS,
+              ...(reservation.reason === "rapid_limit" ? { "Retry-After": "60" } : {})
+            }
+          }
+        );
+      }
+      reservationId = reservation.reservationId;
     }
-    reservationId = reservation.reservationId;
 
     const claims = await generateAssessmentClaims(
       assessmentRequest,
@@ -160,10 +162,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const usage = await completeAssessmentGeneration(
-      access.userId,
-      reservationId
-    );
+    const usage = access.isOwner
+      ? null
+      : await completeAssessmentGeneration(access.userId, reservationId as string);
     completed = true;
     const sourceFactsUsed = new Set(
       claimValidation.claims.flatMap((claim) => claim.sourceFactIds)

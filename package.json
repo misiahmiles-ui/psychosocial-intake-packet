@@ -11,6 +11,7 @@
     "test:state-editions": "node scripts/state-editions-check.mts",
     "test:assessment-safeguards": "node scripts/assessment-safeguards-check.mjs",
     "test:assessment-architecture": "node scripts/assessment-architecture-check.mjs",
+    "test:owner-assessment-entitlement": "node scripts/owner-assessment-entitlement-check.mjs",
     "verify:assessment-pdf": "tsc -p scripts/tsconfig.pdf-verification.json && node tmp/pdf-verification-build/scripts/pdf-verification-fixture.js tmp/assessment-final-verification.pdf",
     "typecheck": "tsc --noEmit"
   },
