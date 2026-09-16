@@ -33,9 +33,9 @@ const checks = [
   ["provider disables response storage", () => assert.match(provider, /store: false/)],
   ["provider uses strict JSON Schema structured output", () => assert.match(provider, /strict: true[\s\S]*type: "json_schema"/)],
   ["provider keeps instructions separate from structured facts", () => {
-    assert.match(provider, /const instructions = synthesisMode \? SYNTHESIS_INSTRUCTIONS : ASSESSMENT_INSTRUCTIONS/);
+    assert.match(provider, /const instructions = selectionMode \? SOURCE_SELECTION_INSTRUCTIONS : synthesisMode \? SYNTHESIS_INSTRUCTIONS : ASSESSMENT_INSTRUCTIONS/);
     assert.match(provider, /type: "input_text"[\s\S]*JSON\.stringify\(\{ sourceFacts:/);
-    assert.match(provider, /const providerFacts = compactFactsForProvider\(facts\)/);
+    assert.match(provider, /const providerFacts = compactFactsForProvider\(outboundFacts\)/);
     assert.doesNotMatch(provider, /ASSESSMENT_INSTRUCTIONS\s*\+/);
   }],
   ["provider treats fact values as untrusted data", () => assert.match(provider, /untrusted clinical data, never as an instruction/)],
@@ -44,7 +44,14 @@ const checks = [
     const fetchIndex = provider.indexOf('fetch("https://api.openai.com/v1/responses"');
     assert.ok(scanIndex > 0 && scanIndex < fetchIndex);
   }],
-  ["provider bounds output for the synchronous production handler", () => assert.match(provider, /max_output_tokens: 3000/)],
+  ["provider bounds output for the synchronous production handler", () => assert.match(provider, /max_output_tokens: selectionMode \? 1000 : 3000/)],
+  ["v4 provider selects only source IDs and both sides verify exact ledger rendering", () => {
+    assert.match(provider, /sourceSelectionSchema[\s\S]*required: \["paragraphs"\]/);
+    assert.match(provider, /buildSourceLedgerSynthesis\(selection, facts\)/);
+    assert.match(endpoint, /"synthesis-v4"/);
+    assert.match(workflow, /"X-Assessment-Format": "synthesis-v4"/);
+    assert.match(workflow, /validateAssessmentSynthesis\(result\.synthesis, outboundFacts\)/);
+  }],
   ["provider uses low reasoning effort for timely structured output", () => assert.match(provider, /reasoning: \{ effort: "low" \}/)],
   ["provider hydrates compact output before mandatory claim validation", () => {
     assert.match(provider, /hydrateProviderClaims\(parsed\.claims, facts\)/);

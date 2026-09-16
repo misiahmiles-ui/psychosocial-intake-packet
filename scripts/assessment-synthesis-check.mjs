@@ -14,6 +14,7 @@ function load(path, overrides = {}) {
     if (id in overrides) return overrides[id];
     if (id === "server-only") return {};
     if (id.startsWith("@/")) return load(`${id.slice(2)}.ts`);
+    if (id.startsWith("./")) return load(`${path.slice(0, path.lastIndexOf("/") + 1)}${id.slice(2)}.ts`);
     return require(id);
   }, module, module.exports);
   if (!Object.keys(overrides).length) cache.set(path, module.exports);
@@ -89,6 +90,55 @@ test("rendered output has required concise structure", () => {
   const text = synth.renderAssessmentSynthesis(draft, facts);
   for (const heading of ["Psychosocial Assessment", "Strengths / Protective Factors", "Identified Needs / Barriers", "Safety Considerations", "Treatment / Service Plan"]) assert.ok(text.includes(heading));
   assert.match(text, /1\. Consider[\s\S]*2\. Review/);
+});
+const selectionFacts = [
+  ...facts,
+  fact(8, "goals-social-work-services-needed", "Benefits counseling and caregiver support.", { domain: "goals_services" }),
+  fact(9, "goals-service-priorities", "Promote safe attendance and monitor mood.", { domain: "goals_services" }),
+  fact(10, "psychosocial-current-stressors", "Reduced independence and transportation barriers."),
+  fact(11, "home-visit-group-community-supports", "Faith community phone support.", { domain: "living_support" })
+];
+const sourceSelection = { paragraphs: [
+  { sourceFactIds: ["fact-001"] },
+  { sourceFactIds: ["fact-002", "fact-010"] },
+  { sourceFactIds: ["fact-003", "fact-007"] }
+] };
+const selectedSynthesis = synth.buildSourceLedgerSynthesis(sourceSelection, selectionFacts);
+test("source selection produces grounded paragraphs and documented plan priorities", () => {
+  assert.ok(selectedSynthesis);
+  assert.equal(selectedSynthesis.renderMode, "source-ledger");
+  assert.equal(synth.validateAssessmentSynthesis(selectedSynthesis, selectionFacts).valid, true);
+  assert.equal(selectedSynthesis.blocks.filter((block) => block.section === "plan").length, 3);
+  assert.match(synth.renderAssessmentSynthesis(selectedSynthesis, selectionFacts), /Benefits counseling and caregiver support/);
+});
+test("source-ledger text cannot be replaced with unsupported clinical prose", () => {
+  const tampered = structuredClone(selectedSynthesis);
+  tampered.blocks[0].text = "The participant enjoys competitive swimming.";
+  rejects(tampered, "source_ledger_mismatch", selectionFacts);
+});
+test("source selection cannot cite nonexistent or safety facts as assessment paragraphs", () => {
+  assert.equal(synth.buildSourceLedgerSynthesis({ paragraphs: [{ sourceFactIds: ["fact-999"] }, ...sourceSelection.paragraphs.slice(1)] }, selectionFacts), null);
+  assert.equal(synth.buildSourceLedgerSynthesis({ paragraphs: [{ sourceFactIds: ["fact-005"] }, ...sourceSelection.paragraphs.slice(1)] }, selectionFacts), null);
+  assert.equal(synth.parseAssessmentSourceSelection({ ...sourceSelection, unsupportedText: "invented diagnosis" }), null);
+});
+const { examplePacket } = load("lib/examplePacket.ts");
+const exampleWorkspace = assessment.createAssessmentWorkspace(examplePacket, "NJ", new Date("2026-09-16T12:00:00Z"));
+const exampleByField = new Map(exampleWorkspace.facts.map((source) => [source.sourceField, source.id]));
+const exampleSelection = { paragraphs: [
+  { sourceFactIds: ["living-current-residence", "living-lives-with", "living-transportation"].map((field) => exampleByField.get(field)) },
+  { sourceFactIds: ["functional-orientation", "functional-ambulation", "functional-adl-help"].map((field) => exampleByField.get(field)) },
+  { sourceFactIds: ["psychosocial-baseline-mood", "psychosocial-mental-health-history", "psychosocial-social-engagement"].map((field) => exampleByField.get(field)) },
+  { sourceFactIds: ["medical-history-major-medical-diagnoses", "goals-participant-family-goals"].map((field) => exampleByField.get(field)) }
+] };
+test("the same fictitious production case supports concise source-selected output", () => {
+  const selected = synth.parseAssessmentSourceSelection(exampleSelection);
+  assert.ok(selected);
+  const result = synth.buildSourceLedgerSynthesis(selected, exampleWorkspace.facts);
+  assert.ok(result);
+  assert.equal(synth.validateAssessmentSynthesis(result, exampleWorkspace.facts).valid, true);
+  assert.equal(synth.scanAssessmentSynthesis(result, exampleWorkspace.facts).length, 0);
+  assert.equal(result.blocks.filter((block) => block.section === "assessment").length, 4);
+  assert.equal(result.blocks.filter((block) => block.section === "plan").length, 4);
 });
 test("facility review preserves neighboring Correctly and full dates remain hard PHI", () => {
   const f = fact(8, "screening-item-1", "Correctly identified Harbor Wellness Adult Day Health Center.", { domain: "cognitive_screening" });
@@ -167,6 +217,28 @@ test("v3 rejects the same unsupported draft consistently without a customer char
   assert.ok(unsupportedResults.every((entry) => entry.status === 502 && entry.body.code === "validation_failed"));
   assert.deepEqual([reserve, complete, release], [14, 1, 13]);
 });
+const v4request = () => new Request("https://example.test/api/assessment/generate", { method: "POST", headers: { "X-Assessment-Format": "synthesis-v4" }, body: JSON.stringify({ version: 1, jurisdiction: "NJ", facts: selectionFacts, reviewedAmbiguousFindings: [] }) });
+owner = true; generated = selectedSynthesis;
+result = await route.POST(v4request());
+test("v4 owner selection renders and validates without touching customer credits", () => {
+  assert.equal(result.status, 200, JSON.stringify(result.body));
+  assert.equal(result.body.usage, null);
+  assert.deepEqual([reserve, complete, release], [14, 1, 13]);
+});
+owner = false;
+result = await route.POST(v4request());
+test("v4 customer success settles exactly one credit after validation", () => {
+  assert.equal(result.status, 200);
+  assert.deepEqual([reserve, complete, release], [15, 2, 13]);
+});
+generated = structuredClone(selectedSynthesis);
+generated.blocks[0].text = "The participant enjoys competitive swimming.";
+const unsupportedV4 = [];
+for (let index = 0; index < 10; index++) unsupportedV4.push(await route.POST(v4request()));
+test("v4 unsupported prose fails consistently and releases every customer reservation", () => {
+  assert.ok(unsupportedV4.every((entry) => entry.status === 502 && entry.body.code === "validation_failed"));
+  assert.deepEqual([reserve, complete, release], [25, 2, 23]);
+});
 owner = true;
 
 // Exercise the actual two-call provider operation. It may not self-certify a
@@ -196,6 +268,18 @@ try {
     assert.equal(calls.length, 1);
     assert.equal(output.semanticReview, undefined);
   });
+  calls = []; responses = [sourceSelection];
+  output = await provider.generateAssessmentClaims({ ...input, facts: selectionFacts }, undefined, true, false, true);
+  test("v4 provider returns only source IDs and the server writes every clinical statement", () => {
+    assert.equal(calls.length, 1);
+    assert.equal(output.renderMode, "source-ledger");
+    assert.equal(JSON.stringify(JSON.parse(calls[0].body).text.format.schema).includes('"text"'), false);
+    assert.ok(JSON.parse(JSON.parse(calls[0].body).input[0].content[0].text).sourceFacts.every((source) => !["safety", "cognitive_screening"].includes(source.domain)));
+    assert.equal(synth.validateAssessmentSynthesis(output, selectionFacts).valid, true);
+  });
+  calls = []; responses = [{ paragraphs: [{ sourceFactIds: ["fact-999"] }, ...sourceSelection.paragraphs.slice(1)] }, { paragraphs: [{ sourceFactIds: ["fact-999"] }, ...sourceSelection.paragraphs.slice(1)] }];
+  await assert.rejects(provider.generateAssessmentClaims({ ...input, facts: selectionFacts }, undefined, true, false, true), (e) => e.failure === "grounding_failed");
+  test("v4 unsupported source IDs fail both attempts without being accepted", () => assert.equal(calls.length, 2));
   calls = []; responses = [altered("The participant has 90 cats in the apartment."), draft];
   output = await provider.generateAssessmentClaims(input, undefined, true, false);
   test("a deterministic grounding rejection gets one bounded replacement draft", () => {

@@ -136,13 +136,15 @@ export async function POST(request: Request) {
     }
 
     const assessmentFormat = request.headers.get("X-Assessment-Format") ?? "";
-    const usesNJSynthesis = assessmentRequest.jurisdiction === "NJ" && ["synthesis-v1", "synthesis-v2", "synthesis-v3"].includes(assessmentFormat);
+    const usesNJSynthesis = assessmentRequest.jurisdiction === "NJ" && ["synthesis-v1", "synthesis-v2", "synthesis-v3", "synthesis-v4"].includes(assessmentFormat);
     const usesLegacyModelSemanticReview = assessmentRequest.jurisdiction === "NJ" && assessmentFormat === "synthesis-v2";
+    const usesSourceSelection = assessmentRequest.jurisdiction === "NJ" && assessmentFormat === "synthesis-v4";
     const draft = await generateAssessmentClaims(
       assessmentRequest,
       request.signal,
       usesNJSynthesis,
-      usesLegacyModelSemanticReview
+      usesLegacyModelSemanticReview,
+      usesSourceSelection
     );
     const synthesis = !Array.isArray(draft) ? draft : undefined;
     const claims = Array.isArray(draft) ? draft : [];
@@ -182,11 +184,13 @@ export async function POST(request: Request) {
     completed = true;
     const validationFormat = !synthesis
       ? "claims-v1"
-      : assessmentFormat === "synthesis-v3"
-        ? "synthesis-v3"
-        : assessmentFormat === "synthesis-v2"
-          ? "synthesis-v2"
-          : "synthesis-v1";
+      : assessmentFormat === "synthesis-v4"
+        ? "synthesis-v4"
+        : assessmentFormat === "synthesis-v3"
+          ? "synthesis-v3"
+          : assessmentFormat === "synthesis-v2"
+            ? "synthesis-v2"
+            : "synthesis-v1";
     recordAssessmentValidationSuccess(performance.now() - startedAt, access.isOwner, validationFormat);
     const authoritative = authoritativeAssessmentBlocks(assessmentRequest.facts);
     const sourceFactsUsed = new Set(synthesis
