@@ -5,6 +5,7 @@ const read = (path) => readFileSync(path, "utf8");
 const endpoint = read("app/api/assessment/generate/route.ts");
 const provider = read("lib/assessmentProvider.ts");
 const providerTelemetry = read("lib/assessmentProviderTelemetry.ts");
+const validationTelemetry = read("lib/assessmentValidationTelemetry.ts");
 const deadline = read("lib/assessmentDeadline.ts");
 const usage = read("lib/assessmentUsage.ts");
 const policy = read("lib/assessmentEntitlementPolicy.ts");
@@ -64,6 +65,11 @@ const checks = [
     assert.match(providerTelemetry, /type ProviderTimingEvent/);
     assert.doesNotMatch(providerTelemetry, /normalizedValue|sourceFactIds|assessmentText|responseBody|apiKey|clinicalText/);
     assert.doesNotMatch(providerTelemetry, /console\.(?:warn|error|debug)/);
+  }],
+  ["grounding failure telemetry logs fixed codes instead of claim content", () => {
+    assert.match(endpoint, /recordAssessmentValidationFailure\(claimValidation\.issues, claims\.length\)/);
+    assert.doesNotMatch(validationTelemetry, /console\.(?:warn|error|debug)|console\.info\([^\n]*issues/);
+    assert.match(validationTelemetry, /categories: classifyAssessmentValidationIssues\(issues\)/);
   }],
   ["initial entitlement defaults are centralized", () => {
     assert.match(policy, /DEFAULT_ASSESSMENT_INCLUDED_QUANTITY = 30/);
