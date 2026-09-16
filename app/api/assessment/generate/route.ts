@@ -138,14 +138,15 @@ export async function POST(request: Request) {
     const draft = await generateAssessmentClaims(
       assessmentRequest,
       request.signal,
-      assessmentRequest.jurisdiction === "NJ" && request.headers.get("X-Assessment-Format") === "synthesis-v1"
+      assessmentRequest.jurisdiction === "NJ" && ["synthesis-v1", "synthesis-v2"].includes(request.headers.get("X-Assessment-Format") ?? ""),
+      assessmentRequest.jurisdiction === "NJ" && request.headers.get("X-Assessment-Format") === "synthesis-v2"
     );
     const synthesis = !Array.isArray(draft) ? draft : undefined;
     const claims = Array.isArray(draft) ? draft : [];
     const claimValidation = synthesis
       ? { ...validateAssessmentSynthesis(synthesis, assessmentRequest.facts), claims: [] }
       : validateClaims(claims, assessmentRequest.facts);
-    if (!claimValidation.valid) {
+    if (!claimValidation.valid || (assessmentRequest.jurisdiction === "NJ" && request.headers.get("X-Assessment-Format") === "synthesis-v2" && !synthesis?.semanticReview)) {
       recordAssessmentValidationFailure(claimValidation.issues, synthesis?.blocks.length ?? claims.length);
       return failure(
         "The generated assessment did not pass source-grounding validation. No generation was charged.",
@@ -176,7 +177,7 @@ export async function POST(request: Request) {
       ? null
       : await completeAssessmentGeneration(access.userId, reservationId as string);
     completed = true;
-    recordAssessmentValidationSuccess(performance.now() - startedAt, access.isOwner, Boolean(synthesis));
+    recordAssessmentValidationSuccess(performance.now() - startedAt, access.isOwner, Boolean(synthesis), Boolean(synthesis?.semanticReview));
     const authoritative = authoritativeAssessmentBlocks(assessmentRequest.facts);
     const sourceFactsUsed = new Set(synthesis
       ? [...synthesis.blocks.flatMap((block) => block.sourceFactIds), ...authoritative.safety.flatMap((block) => block.sourceFactIds), ...(authoritative.screening?.sourceFactIds ?? [])]
@@ -203,6 +204,12 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     if (error instanceof AssessmentProviderError) {
+      if (error.failure === "grounding_failed") {
+        return failure("The generated assessment did not pass source-grounding validation. No generation was charged.", 502, "validation_failed");
+      }
+      if (error.failure === "output_phi_blocked") {
+        return failure("The generated assessment did not pass the post-generation privacy scan. No generation was charged.", 502, "output_phi_blocked");
+      }
       if (error.failure === "aborted") {
         return failure("Assessment generation was aborted. No generation was charged.", 499, "aborted");
       }

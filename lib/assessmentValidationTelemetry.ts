@@ -1,6 +1,15 @@
 import "server-only";
 
 const ISSUE_RULES = [
+  ["semantic_review_incomplete", /^semantic_review_incomplete$/],
+  ["semantic_unsupported_statement", /^semantic_unsupported_statement$/],
+  ["semantic_polarity_changed", /^semantic_polarity_changed$/],
+  ["semantic_temporal_changed", /^semantic_temporal_changed$/],
+  ["semantic_attribution_changed", /^semantic_attribution_changed$/],
+  ["semantic_unsupported_diagnosis", /^semantic_unsupported_diagnosis$/],
+  ["semantic_screening_boundary", /^semantic_screening_boundary$/],
+  ["semantic_unsupported_plan", /^semantic_unsupported_plan$/],
+  ["semantic_safety_changed", /^semantic_safety_changed$/],
   ["synthesis_shape", /^invalid_synthesis_shape$/],
   ["unsupported_statement", /^unsupported_statement$/],
   ["source_attribution_changed", /^source_attribution_changed$/],
@@ -49,10 +58,10 @@ export function recordAssessmentValidationFailure(issues: string[], claimCount: 
   }));
 }
 
-export function recordAssessmentValidationSuccess(elapsedMs: number, owner: boolean, synthesis: boolean) {
+export function recordAssessmentValidationSuccess(elapsedMs: number, owner: boolean, synthesis: boolean, semantic = false) {
   console.info("assessment_validation_success", JSON.stringify({
     elapsedMs: Math.max(0, Math.round(elapsedMs)),
-    format: synthesis ? "synthesis-v1" : "claims-v1",
+    format: semantic ? "synthesis-v2" : synthesis ? "synthesis-v1" : "claims-v1",
     grounding: "passed", safety: "passed", screening: "passed", outputPhi: "passed",
     owner, chargedCredits: owner ? 0 : 1
   }));

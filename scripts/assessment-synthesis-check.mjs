@@ -118,4 +118,69 @@ test("invalid or PHI output never charges", () => { assert.equal(result.status, 
 fail = true;
 result = await route.POST(request());
 test("provider failure releases reservation without charging", () => { assert.equal(result.status, 503); assert.deepEqual([reserve, complete, release], [4, 1, 3]); });
+
+const semantic = load("lib/assessmentSemanticReview.ts");
+const approved = { blocks: draft.blocks.map((_, index) => ({ index, verdict: "supported" })) };
+test("semantic review must cover every block exactly once", () => {
+  for (const bad of [null, {}, { blocks: [] }, { blocks: approved.blocks.slice(1) }, { blocks: approved.blocks.map(() => approved.blocks[0]) }, { blocks: approved.blocks.map((b) => ({ ...b, verdict: "probably" })) }]) assert.ok(semantic.semanticReviewIssues(bad, draft.blocks.length).length);
+});
+test("all clinical semantic failure categories are blocking", () => {
+  for (const verdict of semantic.GROUNDING_VERDICTS.filter((v) => v !== "supported")) {
+    const review = structuredClone(approved); review.blocks[0].verdict = verdict;
+    assert.deepEqual(semantic.semanticReviewIssues(review, draft.blocks.length), [`semantic_${verdict}`]);
+    assert.equal(synth.validateAssessmentSynthesis({ ...draft, semanticReview: review }, facts).valid, false);
+  }
+});
+test("semantic approval cannot override numeric or screening hard gates", () => {
+  rejects({ ...altered("Lives in an apartment with 999 rooms."), semanticReview: approved }, "unsupported_numeric");
+  rejects({ ...altered("Screening establishes dementia.", ["fact-006"]), semanticReview: approved }, "screening_boundary");
+});
+test("review criteria require clause-level support, polarity, attribution and plan boundaries", () => {
+  for (const text of ["EVERY material statement", "ONLY its cited", "exact reporter", "unknown versus not assessed", "functional independence", "consequential commitments", "unsupported or uncertain"]) assert.ok(semantic.SEMANTIC_REVIEW_INSTRUCTIONS.includes(text));
+});
+fail = false; owner = true; generated = draft;
+const v2request = () => new Request("https://example.test/api/assessment/generate", { method: "POST", headers: { "X-Assessment-Format": "synthesis-v2" }, body: JSON.stringify({ version: 1, jurisdiction: "NJ", facts, reviewedAmbiguousFindings: [] }) });
+result = await route.POST(v2request());
+test("new route contract refuses a draft missing independent review", () => assert.equal(result.status, 502));
+generated = { ...draft, semanticReview: approved };
+result = await route.POST(v2request());
+test("new owner contract completes only with full semantic coverage and no charge", () => { assert.equal(result.status, 200); assert.equal(result.body.usage, null); assert.deepEqual([reserve, complete, release], [4, 1, 3]); });
+
+// Exercise the actual two-call provider operation. It may not self-certify a
+// draft, leak PHI to the reviewer, accept missing verdicts, or reset its budget.
+const provider = load("lib/assessmentProvider.ts", {
+  "@/lib/assessmentUsage": { getAssessmentGenerationConfig: () => ({ timeoutMs: 42_000 }) },
+  "@/lib/assessmentProviderTelemetry": { recordAssessmentProviderTiming: () => {} },
+  "@/lib/assessmentValidationTelemetry": { recordAssessmentValidationFailure: () => {} }
+});
+const originalFetch = globalThis.fetch, originalKey = process.env.OPENAI_API_KEY;
+process.env.OPENAI_API_KEY = "fictitious-test-key";
+let responses = [], calls = [];
+const envelope = (value) => new Response(JSON.stringify({ status: "completed", output: [{ content: [{ type: "output_text", text: JSON.stringify(value) }] }] }), { status: 200 });
+globalThis.fetch = async (_url, options) => { calls.push(options); return envelope(responses.shift()); };
+try {
+  const input = { version: 1, jurisdiction: "NJ", facts, reviewedAmbiguousFindings: [] };
+  responses = [draft, approved];
+  let output = await provider.generateAssessmentClaims(input, undefined, true, true);
+  test("draft and independent review share one signal and disable storage", () => {
+    assert.equal(calls.length, 2); assert.equal(calls[0].signal, calls[1].signal);
+    for (const call of calls) { const body = JSON.parse(call.body); assert.equal(body.store, false); assert.equal(body.reasoning.effort, "low"); }
+    assert.deepEqual(output.semanticReview, approved);
+  });
+  calls = []; responses = [{ ...draft, semanticReview: approved }];
+  await assert.rejects(provider.generateAssessmentClaims(input, undefined, true, true), (e) => e.failure === "invalid_response");
+  test("draft provider cannot self-certify grounding", () => assert.equal(calls.length, 1));
+  calls = []; responses = [draft, { blocks: approved.blocks.slice(1) }];
+  await assert.rejects(provider.generateAssessmentClaims(input, undefined, true, true), (e) => e.failure === "grounding_failed");
+  test("missing independent verdict blocks generation without retrying acceptance", () => assert.equal(calls.length, 2));
+  calls = []; responses = [draft, { blocks: approved.blocks.map((b) => ({ ...b, verdict: "polarity_changed" })) }];
+  await assert.rejects(provider.generateAssessmentClaims(input, undefined, true, true), (e) => e.failure === "grounding_failed");
+  test("independent semantic rejection cannot be regenerated away", () => assert.equal(calls.length, 2));
+  calls = []; responses = [altered("Lives alone in an apartment. Email person@example.test.")];
+  await assert.rejects(provider.generateAssessmentClaims(input, undefined, true, true), (e) => e.failure === "output_phi_blocked");
+  test("provider-added PHI is blocked before the second outbound call", () => assert.equal(calls.length, 1));
+} finally {
+  globalThis.fetch = originalFetch;
+  if (originalKey === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = originalKey;
+}
 console.log(`Assessment synthesis: ${passed} passed.`);

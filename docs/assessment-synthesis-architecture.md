@@ -14,7 +14,11 @@ Reference: LeanMaster production revision `ef76ca0735ed841e82fa98eed484207247094
 
 ## Compatibility and execution
 
-Only NJ clients opting in with `X-Assessment-Format: synthesis-v1` receive this response. Existing browser bundles and Maryland keep the existing claims contract; an old browser must not incur a successful-generation charge for a response it cannot parse.
+NJ clients use `X-Assessment-Format: synthesis-v2`. Old `synthesis-v1` clients retain the v1 checks; legacy browser bundles and Maryland keep the existing claims contract. An old browser must not incur a successful-generation charge for a response it cannot parse.
+
+The first live synthesis run completed its provider draft in 13.139 seconds but failed sentence-wide relationship/polarity heuristics. The final contract therefore requires an independent, bounded semantic review of every paragraph/plan item against only its cited immutable evidence. It returns index/verdict codes, never a second narrative. Complete unique coverage is mandatory; unsupported or uncertain statements fail. The draft provider cannot self-certify. These reviewed semantic decisions replace only prose-similarity and sentence-global polarity/attribution guesses, not source-ID, schema, numeric, diagnosis, safety, screening or privacy hard gates. Browser verification requires the complete review result as well as local deterministic checks.
+
+The additional review is a second synchronous, `store:false` request to the same provider, using only de-identified facts and an output-PHI-scanned draft. It has no separate timeout and runs inside the same 42-second overall deadline. No new clinical persistence or background mode is introduced. A rejected review is not retried into acceptance.
 
 The existing 42-second overall deadline, retry backoff, low effort, 3,000-token ceiling and failure categories remain. Validation failure is not automatically regenerated into acceptance. A user retry starts from the intake and PHI Review Gate. Unavailable-provider retries remain inside the same overall deadline.
 

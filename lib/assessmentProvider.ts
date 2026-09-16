@@ -12,13 +12,17 @@ import { scanSerializedOutboundPayload } from "@/lib/assessment";
 import { recordAssessmentProviderTiming } from "@/lib/assessmentProviderTelemetry";
 import { compactFactsForProvider, hydrateProviderClaims } from "@/lib/assessmentProviderDraft";
 import type { AssessmentRequest } from "@/types/assessment";
-import { parseAssessmentSynthesis, sourceEvidenceLabel, SYNTHESIS_SECTIONS, type AssessmentSynthesis } from "@/lib/assessmentSynthesis";
+import { parseAssessmentSynthesis, scanAssessmentSynthesis, sourceEvidenceLabel, SYNTHESIS_SECTIONS, type AssessmentSynthesis } from "@/lib/assessmentSynthesis";
+import { reviewDraft, semanticReviewIssues, SEMANTIC_REVIEW_INSTRUCTIONS, semanticReviewSchema, type SemanticReview } from "@/lib/assessmentSemanticReview";
+import { recordAssessmentValidationFailure } from "@/lib/assessmentValidationTelemetry";
 
 export type AssessmentProviderFailure =
   | "aborted"
   | "configuration"
   | "incomplete"
   | "invalid_response"
+  | "grounding_failed"
+  | "output_phi_blocked"
   | "privacy_blocked"
   | "timeout"
   | "unavailable";
@@ -108,7 +112,8 @@ const RETRY_DELAY_MS = 250;
 export async function generateAssessmentClaims(
   assessmentRequest: AssessmentRequest,
   requestSignal?: AbortSignal,
-  useSynthesis = false
+  useSynthesis = false,
+  reviewSemantics = false
 ): Promise<AssessmentClaim[] | AssessmentSynthesis> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new AssessmentProviderError("configuration");
@@ -118,7 +123,7 @@ export async function generateAssessmentClaims(
 
   try {
     const claims = await runWithAssessmentDeadline(
-      (signal) => makeResponsesApiCall(assessmentRequest, apiKey, signal, runId, ++attempt, useSynthesis),
+      (signal) => makeResponsesApiCall(assessmentRequest, apiKey, signal, runId, ++attempt, useSynthesis, reviewSemantics),
       {
         minimumRetryRemainingMs: MINIMUM_RETRY_REMAINING_MS,
         requestSignal,
@@ -151,7 +156,8 @@ async function makeResponsesApiCall(
   signal: AbortSignal,
   runId: string,
   attempt: number,
-  useSynthesis: boolean
+  useSynthesis: boolean,
+  reviewSemantics: boolean
 ) {
   try {
     const facts = assessmentRequest.facts;
@@ -238,8 +244,15 @@ async function makeResponsesApiCall(
       throw new AssessmentProviderError("invalid_response");
     }
     if (synthesisMode) {
+      // Only the independent server review may attach a review result. A draft
+      // provider can never self-certify by inserting a verdict into its output.
+      if (!isRecord(parsed) || Object.keys(parsed).length !== 1) throw new AssessmentProviderError("invalid_response");
       const synthesis = parseAssessmentSynthesis(parsed);
       if (!synthesis) throw new AssessmentProviderError("invalid_response");
+      if (reviewSemantics) {
+        if (scanAssessmentSynthesis(synthesis, facts).length) throw new AssessmentProviderError("output_phi_blocked");
+        synthesis.semanticReview = await reviewSynthesisGrounding(synthesis, assessmentRequest, apiKey, signal, runId, attempt);
+      }
       return synthesis;
     }
     if (!isRecord(parsed) || !Array.isArray(parsed.claims)) {
@@ -259,6 +272,42 @@ async function makeResponsesApiCall(
     if (signal.aborted) throw new AssessmentProviderError("aborted");
     throw new AssessmentProviderError("unavailable");
   }
+}
+
+async function reviewSynthesisGrounding(synthesis: AssessmentSynthesis, request: AssessmentRequest, apiKey: string, signal: AbortSignal, runId: string, attempt: number): Promise<SemanticReview> {
+  const cited = new Set(synthesis.blocks.flatMap((block) => block.sourceFactIds));
+  const evidence = request.facts.filter((fact) => cited.has(fact.id));
+  const body = JSON.stringify({
+    model: process.env.OPENAI_MODEL || "gpt-5.5", reasoning: { effort: "low" }, store: false,
+    max_output_tokens: 900,
+    instructions: SEMANTIC_REVIEW_INSTRUCTIONS,
+    input: JSON.stringify({
+      sourceFacts: compactFactsForProvider(evidence).map((fact, index) => ({ ...fact, context: sourceEvidenceLabel(evidence[index]) })),
+      draft: reviewDraft(synthesis)
+    }),
+    text: { format: { type: "json_schema", name: "assessment_grounding_review", strict: true, schema: semanticReviewSchema } }
+  });
+  if (scanSerializedOutboundPayload(body, request.facts, request.reviewedAmbiguousFindings).length) throw new AssessmentProviderError("privacy_blocked");
+  const startedAt = performance.now();
+  // The SAME AbortSignal/deadline covers drafting, review and response parsing.
+  // No fresh timeout, background response, persisted draft or unvalidated stream.
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST", cache: "no-store", signal,
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" }, body
+  });
+  recordAssessmentProviderTiming({ runId, attempt, phase: "grounding_headers", phaseMs: Math.round(performance.now() - startedAt), status: response.status });
+  if (!response.ok) throw new AssessmentProviderError("unavailable");
+  const text = extractOutputText(await response.json());
+  if (!text) throw new AssessmentProviderError("incomplete");
+  let review: unknown;
+  try { review = JSON.parse(text); } catch { throw new AssessmentProviderError("invalid_response"); }
+  const issues = semanticReviewIssues(review, synthesis.blocks.length);
+  if (issues.length) {
+    recordAssessmentValidationFailure(issues, synthesis.blocks.length);
+    throw new AssessmentProviderError("grounding_failed");
+  }
+  recordAssessmentProviderTiming({ runId, attempt, phase: "grounding_complete", phaseMs: Math.round(performance.now() - startedAt) });
+  return review as SemanticReview;
 }
 
 function safeProviderResultMetrics(value: unknown) {
