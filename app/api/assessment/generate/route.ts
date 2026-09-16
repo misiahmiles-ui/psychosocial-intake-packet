@@ -17,7 +17,8 @@ import {
   AssessmentProviderError,
   generateAssessmentClaims
 } from "@/lib/assessmentProvider";
-import { recordAssessmentValidationFailure } from "@/lib/assessmentValidationTelemetry";
+import { recordAssessmentValidationFailure, recordAssessmentValidationSuccess } from "@/lib/assessmentValidationTelemetry";
+import { authoritativeAssessmentBlocks, renderAssessmentSynthesis, scanAssessmentSynthesis, validateAssessmentSynthesis } from "@/lib/assessmentSynthesis";
 import {
   completeAssessmentGeneration,
   releaseAssessmentGeneration,
@@ -40,6 +41,7 @@ const NO_STORE_HEADERS = {
 };
 
 export async function POST(request: Request) {
+  const startedAt = performance.now();
   if (!requestIsSameOrigin(request)) {
     return failure("Cross-site requests are not allowed.", 403, "cross_site");
   }
@@ -133,13 +135,18 @@ export async function POST(request: Request) {
       reservationId = reservation.reservationId;
     }
 
-    const claims = await generateAssessmentClaims(
+    const draft = await generateAssessmentClaims(
       assessmentRequest,
-      request.signal
+      request.signal,
+      assessmentRequest.jurisdiction === "NJ" && request.headers.get("X-Assessment-Format") === "synthesis-v1"
     );
-    const claimValidation = validateClaims(claims, assessmentRequest.facts);
+    const synthesis = !Array.isArray(draft) ? draft : undefined;
+    const claims = Array.isArray(draft) ? draft : [];
+    const claimValidation = synthesis
+      ? { ...validateAssessmentSynthesis(synthesis, assessmentRequest.facts), claims: [] }
+      : validateClaims(claims, assessmentRequest.facts);
     if (!claimValidation.valid) {
-      recordAssessmentValidationFailure(claimValidation.issues, claims.length);
+      recordAssessmentValidationFailure(claimValidation.issues, synthesis?.blocks.length ?? claims.length);
       return failure(
         "The generated assessment did not pass source-grounding validation. No generation was charged.",
         502,
@@ -147,7 +154,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (scanGeneratedClaims(claimValidation.claims).length) {
+    if (synthesis ? scanAssessmentSynthesis(synthesis, assessmentRequest.facts).length : scanGeneratedClaims(claimValidation.claims).length) {
       return failure(
         "The generated assessment did not pass the post-generation privacy scan. No generation was charged.",
         502,
@@ -155,7 +162,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const assessmentText = renderAssessmentFromClaims(claimValidation.claims);
+    const assessmentText = synthesis ? renderAssessmentSynthesis(synthesis, assessmentRequest.facts) : renderAssessmentFromClaims(claimValidation.claims);
     if (!assessmentText) {
       return failure(
         "The generated assessment was incomplete. No generation was charged.",
@@ -164,16 +171,20 @@ export async function POST(request: Request) {
       );
     }
 
+    if (request.signal.aborted) throw new AssessmentProviderError("aborted");
     const usage = access.isOwner
       ? null
       : await completeAssessmentGeneration(access.userId, reservationId as string);
     completed = true;
-    const sourceFactsUsed = new Set(
-      claimValidation.claims.flatMap((claim) => claim.sourceFactIds)
-    ).size;
+    recordAssessmentValidationSuccess(performance.now() - startedAt, access.isOwner, Boolean(synthesis));
+    const authoritative = authoritativeAssessmentBlocks(assessmentRequest.facts);
+    const sourceFactsUsed = new Set(synthesis
+      ? [...synthesis.blocks.flatMap((block) => block.sourceFactIds), ...authoritative.safety.flatMap((block) => block.sourceFactIds), ...(authoritative.screening?.sourceFactIds ?? [])]
+      : claimValidation.claims.flatMap((claim) => claim.sourceFactIds)).size;
     const response: ValidatedAssessmentResponse = {
       assessmentText,
       claims: claimValidation.claims,
+      ...(synthesis ? { synthesis } : {}),
       usage,
       validation: {
         criticalUnresolvedConflicts: 0,

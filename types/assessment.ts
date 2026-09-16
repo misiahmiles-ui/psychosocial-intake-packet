@@ -247,6 +247,7 @@ export type AssessmentValidationSummary = {
 };
 
 export type ValidatedAssessmentResponse = {
+  synthesis?: import("@/lib/assessmentSynthesis").AssessmentSynthesis;
   claims: AssessmentClaim[];
   assessmentText: string;
   validation: AssessmentValidationSummary;

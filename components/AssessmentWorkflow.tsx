@@ -29,6 +29,7 @@ import {
   RECURRING_ASSESSMENT_ENTITLEMENT_LABEL
 } from "@/lib/assessmentEntitlementPolicy";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { renderAssessmentSynthesis, scanAssessmentSynthesis, validateAssessmentSynthesis } from "@/lib/assessmentSynthesis";
 import type {
   AcceptedAssessment,
   AssessmentClaim,
@@ -199,6 +200,7 @@ export function AssessmentWorkflow({
         credentials: "same-origin",
         headers: {
           Authorization: `Bearer ${session.access_token}`,
+          ...(jurisdiction === "NJ" ? { "X-Assessment-Format": "synthesis-v1" } : {}),
           "Content-Type": "application/json"
         },
         body: JSON.stringify(requestBody),
@@ -212,11 +214,15 @@ export function AssessmentWorkflow({
         throw new Error("The assessment response was incomplete and was not accepted.");
       }
 
-      const checked = validateClaims(result.claims, outboundFacts);
-      const rendered = renderAssessmentFromClaims(checked.claims);
+      const checked = result.synthesis && jurisdiction === "NJ"
+        ? { ...validateAssessmentSynthesis(result.synthesis, outboundFacts), claims: [] }
+        : validateClaims(result.claims, outboundFacts);
+      const rendered = result.synthesis && jurisdiction === "NJ"
+        ? renderAssessmentSynthesis(result.synthesis, outboundFacts)
+        : renderAssessmentFromClaims(checked.claims);
       if (
         !checked.valid ||
-        scanGeneratedClaims(checked.claims).length ||
+        (result.synthesis ? scanAssessmentSynthesis(result.synthesis, outboundFacts).length : scanGeneratedClaims(checked.claims).length) ||
         !rendered ||
         rendered !== result.assessmentText
       ) {
