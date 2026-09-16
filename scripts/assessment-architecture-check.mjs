@@ -40,8 +40,13 @@ const checks = [
     const fetchIndex = provider.indexOf('fetch("https://api.openai.com/v1/responses"');
     assert.ok(scanIndex > 0 && scanIndex < fetchIndex);
   }],
-  ["provider has an explicit output token limit", () => assert.match(provider, /max_output_tokens: 6000/)],
-  ["provider has an abortable timeout", () => assert.match(provider, /setTimeout[\s\S]*controller\.abort/)],
+  ["provider bounds output for the synchronous production handler", () => assert.match(provider, /max_output_tokens: 3000/)],
+  ["provider uses low reasoning effort for timely structured output", () => assert.match(provider, /reasoning: \{ effort: "low" \}/)],
+  ["provider has an abortable pre-platform timeout", () => {
+    assert.match(provider, /PLATFORM_RESPONSE_DEADLINE_MS = 25_000/);
+    assert.match(provider, /Math\.min\(getAssessmentGenerationConfig\(\)\.timeoutMs, PLATFORM_RESPONSE_DEADLINE_MS\)/);
+    assert.match(provider, /setTimeout[\s\S]*controller\.abort/);
+  }],
   ["provider errors never include the provider response body", () => assert.doesNotMatch(provider, /response\.text|console\./)],
   ["initial entitlement defaults are centralized", () => {
     assert.match(policy, /DEFAULT_ASSESSMENT_INCLUDED_QUANTITY = 30/);
@@ -120,6 +125,10 @@ const checks = [
   ["workflow never sends generated or edited assessment text", () => {
     const requestBlock = workflow.slice(workflow.indexOf("const requestBody"), workflow.indexOf("const controller"));
     assert.doesNotMatch(requestBlock, /generatedText|workingText|acceptedAssessment/);
+  }],
+  ["workflow maps host gateway failures to a PHI-safe timeout category", () => {
+    assert.match(workflow, /readSafeGenerationError\(response\.status, result\)/);
+    assert.match(workflow, /status === 504[\s\S]*No generation was charged/);
   }],
   ["clinician edits are explicitly distinguished", () => assert.match(workflow, /Contains clinician-authored edits/)],
   ["stale assessments are detected", () => assert.match(workflow, /generatedRevision !== currentRevisionToken/)],

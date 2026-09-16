@@ -108,6 +108,11 @@ const assessmentSchema = {
   }
 } as const;
 
+// Netlify's production handler terminated the synchronous request at about 30
+// seconds. Keep the provider deadline below that boundary so the route can
+// return a PHI-safe JSON timeout and release a customer reservation itself.
+const PLATFORM_RESPONSE_DEADLINE_MS = 25_000;
+
 export async function generateAssessmentClaims(
   assessmentRequest: AssessmentRequest,
   requestSignal?: AbortSignal
@@ -143,7 +148,7 @@ async function makeResponsesApiCall(
   const timeout = setTimeout(() => {
     timedOut = true;
     controller.abort();
-  }, getAssessmentGenerationConfig().timeoutMs);
+  }, Math.min(getAssessmentGenerationConfig().timeoutMs, PLATFORM_RESPONSE_DEADLINE_MS));
   const abortForRequest = () => controller.abort();
   requestSignal?.addEventListener("abort", abortForRequest, { once: true });
 
@@ -162,8 +167,9 @@ async function makeResponsesApiCall(
         }
       ],
       instructions: ASSESSMENT_INSTRUCTIONS,
-      max_output_tokens: 6000,
+      max_output_tokens: 3000,
       model: process.env.OPENAI_MODEL || "gpt-5.5",
+      reasoning: { effort: "low" },
       store: false,
       text: {
         format: {
