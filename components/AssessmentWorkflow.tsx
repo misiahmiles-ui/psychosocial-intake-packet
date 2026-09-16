@@ -206,7 +206,7 @@ export function AssessmentWorkflow({
       });
       const result: unknown = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(readSafeError(result));
+        throw new Error(readSafeGenerationError(response.status, result));
       }
       if (!isValidatedResponse(result)) {
         throw new Error("The assessment response was incomplete and was not accepted.");
@@ -484,10 +484,20 @@ function Notice({ children, tone }: { children: React.ReactNode; tone: "success"
   return <p className={`mt-4 rounded-lg border p-3 text-sm font-semibold leading-6 ${tone === "success" ? "border-[#cde7df] bg-mint text-sea" : "border-[#e7c5b9] bg-[#fff8f5] text-[#643524]"}`}>{children}</p>;
 }
 
-function readSafeError(value: unknown) {
-  return value && typeof value === "object" && "error" in value && typeof value.error === "string"
-    ? value.error
-    : "Assessment generation could not be completed.";
+function readSafeGenerationError(status: number, value: unknown) {
+  if (value && typeof value === "object" && "error" in value && typeof value.error === "string") {
+    return value.error;
+  }
+  if (status === 504) {
+    return "Assessment generation timed out before a validated response was received. No generation was charged.";
+  }
+  if (status === 502 || status === 503) {
+    return "Assessment generation is temporarily unavailable. No generation was charged.";
+  }
+  if (status === 429) {
+    return "Assessment generation is temporarily limited. Please wait before trying again.";
+  }
+  return "Assessment generation could not be completed.";
 }
 
 function isValidatedResponse(value: unknown): value is ValidatedAssessmentResponse {

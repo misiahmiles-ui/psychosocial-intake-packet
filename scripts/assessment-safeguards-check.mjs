@@ -181,6 +181,49 @@ test("a role followed by a full name is scanned as one complete ambiguous span",
   assert.ok(findings.some((item) => item.detectedText === "Caregiver Jane Sample"));
 });
 
+test("mental-status facility review preserves adjacent narrative text", () => {
+  const input = packet();
+  input.mentalStatus.responses[0] = {
+    question: "What is the name of this place?",
+    status: "correct",
+    notes: "Correctly identified Harbor Wellness Adult Day Health Center."
+  };
+  const workspace = assessment.createAssessmentWorkspace(input, "NJ");
+  const source = workspace.facts.find((item) => item.sourceField === "screening-item-1");
+  assert.equal(source.normalizedValue, "response: correct; notes: Correctly identified Harbor Wellness Adult Day Health Center.");
+  assert.equal(workspace.findings.some((item) => item.kind === "record_identifier"), false);
+  const facilityFinding = workspace.findings.find((item) => item.kind === "person_name" && item.detectedText.includes("Harbor Wellness"));
+  assert.ok(facilityFinding);
+  assert.match(facilityFinding.snippet, /Correctly identified Harbor Wellness Adult Day Health Center\./);
+  const changed = assessment.replaceFindingInFacts([source], facilityFinding, "the program");
+  assert.match(changed[0].normalizedValue, /Correctly identified the program/);
+  assert.doesNotMatch(changed[0].normalizedValue, /notes: rrectly identified/);
+});
+
+test("a stale or malformed PHI range cannot delete neighboring characters", () => {
+  const source = fact({ normalizedValue: "Correctly identified Harbor Wellness Adult Day Health Center." });
+  const finding = assessment.scanAssessmentFacts([source]).find((item) => item.kind === "person_name");
+  assert.ok(finding);
+  const changed = assessment.replaceFindingInFacts([source], {
+    ...finding,
+    start: finding.start - 2,
+    end: finding.end - 2
+  }, "the program");
+  assert.equal(changed[0].normalizedValue, source.normalizedValue);
+});
+
+test("an exact mental-status date remains a hard identifier", () => {
+  const input = packet();
+  input.mentalStatus.responses[2] = {
+    question: "What is today's date?",
+    status: "correct",
+    notes: "Correctly stated September 15, 2026."
+  };
+  const workspace = assessment.createAssessmentWorkspace(input, "NJ");
+  const source = workspace.facts.find((item) => item.sourceField === "screening-item-3");
+  assert.ok(workspace.findings.some((item) => item.factId === source.id && item.kind === "full_date" && item.severity === "hard_block"));
+});
+
 test("ambiguous name review is scoped by fact and character coordinates", () => {
   const source = fact({ normalizedValue: "Support is provided by Jane Sample each evening." });
   const finding = assessment.scanAssessmentFacts([source]).find((item) => item.kind === "person_name");

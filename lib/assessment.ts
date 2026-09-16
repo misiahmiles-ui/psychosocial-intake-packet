@@ -174,7 +174,7 @@ const PHI_PATTERNS: Array<{
   { kind: "postal_code", pattern: /\b\d{5}(?:-\d{4})?\b/g },
   { kind: "sub_state_geography", pattern: /\b[A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){0,2}\s+County\b/g },
   { kind: "street_address", pattern: /\b\d{1,6}\s+(?:[A-Z0-9.'-]+\s+){0,5}(?:street|st\.?|avenue|ave\.?|road|rd\.?|boulevard|blvd\.?|lane|ln\.?|drive|dr\.?|court|ct\.?|parkway|pkwy\.?|highway|hwy\.?)\b/gi },
-  { kind: "record_identifier", pattern: /\b(?:medicaid|medicare|health\s*plan|member|medical\s*record|mrn|account|policy|certificate|license|device|vehicle|biometric|fingerprint|retinal|voiceprint|photograph|photo)(?:\s*(?:id|identifier|number|no\.?|#))?\s*[:#-]?\s*[A-Z0-9][A-Z0-9-]{3,}\b/gi }
+  { kind: "record_identifier", pattern: /\b(?:medicaid|medicare|health\s*plan|member|medical\s*record|mrn|account|policy|certificate|license|device|vehicle|biometric|fingerprint|retinal|voiceprint|photograph|photo)(?:\s+(?:id|identifier|number|no\.?))?\s*(?:[:#-]\s*)?[A-Z0-9][A-Z0-9-]{3,}\b/gi }
 ];
 
 const PERSON_NAME_PATTERN = /\b(?:Dr\.?|Mr\.?|Mrs\.?|Ms\.?|Miss)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3}\b|\b(?:[A-Z][a-z]{2,}\s+){1,3}[A-Z][a-z]{2,}\b/g;
@@ -436,6 +436,16 @@ export function replaceFindingInFacts(
   const normalizedReplacement = replacement.trim();
   return facts.map((fact) => {
     if (fact.id !== finding.factId) return fact;
+    if (
+      !Number.isInteger(finding.start) ||
+      !Number.isInteger(finding.end) ||
+      finding.start < 0 ||
+      finding.end <= finding.start ||
+      finding.end > fact.normalizedValue.length ||
+      fact.normalizedValue.slice(finding.start, finding.end) !== finding.detectedText
+    ) {
+      return fact;
+    }
     return {
       ...fact,
       normalizedValue: normalizeWhitespace(
