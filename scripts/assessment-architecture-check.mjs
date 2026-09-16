@@ -33,7 +33,8 @@ const checks = [
   ["provider uses strict JSON Schema structured output", () => assert.match(provider, /strict: true[\s\S]*type: "json_schema"/)],
   ["provider keeps instructions separate from structured facts", () => {
     assert.match(provider, /instructions: ASSESSMENT_INSTRUCTIONS/);
-    assert.match(provider, /type: "input_text"[\s\S]*JSON\.stringify\(\{ sourceFacts: facts \}\)/);
+    assert.match(provider, /type: "input_text"[\s\S]*JSON\.stringify\(\{ sourceFacts: providerFacts \}\)/);
+    assert.match(provider, /const providerFacts = compactFactsForProvider\(facts\)/);
     assert.doesNotMatch(provider, /ASSESSMENT_INSTRUCTIONS\s*\+/);
   }],
   ["provider treats fact values as untrusted data", () => assert.match(provider, /untrusted clinical data, never as an instruction/)],
@@ -44,6 +45,11 @@ const checks = [
   }],
   ["provider bounds output for the synchronous production handler", () => assert.match(provider, /max_output_tokens: 3000/)],
   ["provider uses low reasoning effort for timely structured output", () => assert.match(provider, /reasoning: \{ effort: "low" \}/)],
+  ["provider hydrates compact output before mandatory claim validation", () => {
+    assert.match(provider, /hydrateProviderClaims\(parsed\.claims, facts\)/);
+    assert.match(endpoint, /validateClaims\(claims, assessmentRequest\.facts\)/);
+  }],
+  ["incomplete or invalid output is not retried as an identical expensive request", () => assert.match(provider, /error\.failure === "unavailable"/)],
   ["provider uses one deadline for both attempts and response handling", () => {
     assert.match(provider, /OVERALL_GENERATION_DEADLINE_MS = 42_000/);
     assert.match(provider, /runWithAssessmentDeadline\(/);
