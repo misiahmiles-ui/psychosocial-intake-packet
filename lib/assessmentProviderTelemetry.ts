@@ -2,7 +2,7 @@ import "server-only";
 
 type ProviderTimingEvent = {
   runId: string;
-  phase: "request" | "headers" | "body" | "complete" | "failure";
+  phase: "request" | "headers" | "body" | "provider_result" | "attempt_failure" | "complete" | "failure";
   attempt?: number;
   elapsedMs?: number;
   phaseMs?: number;
@@ -15,6 +15,11 @@ type ProviderTimingEvent = {
   reasoningEffort?: "low";
   maxOutputTokens?: number;
   failure?: string;
+  responseStatus?: string;
+  incompleteReason?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  reasoningTokens?: number;
 };
 
 // This closed metric shape deliberately excludes facts, prompts, response text,
