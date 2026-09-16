@@ -18,6 +18,7 @@ type AccessResult =
   | {
       authorized: true;
       entitlementActivation: AssessmentEntitlementActivation | null;
+      isOwner: boolean;
       userId: string;
     }
   | { authorized: false; error: string; status: number };
@@ -95,6 +96,7 @@ export async function authorizeAssessmentGeneration(
     return {
       authorized: true,
       entitlementActivation: null,
+      isOwner: true,
       userId: user.id
     };
   }
@@ -126,6 +128,7 @@ export async function authorizeAssessmentGeneration(
               ...sharedAccess.purchaseActivation
             }
           : null,
+        isOwner: false,
         userId: user.id
       };
     }
@@ -162,6 +165,7 @@ export async function authorizeAssessmentGeneration(
             userId: user.id
           }
         : null,
+    isOwner: false,
     userId: user.id
   };
 }

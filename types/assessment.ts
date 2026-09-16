@@ -256,7 +256,7 @@ export type ValidatedAssessmentResponse = {
     remainingGenerations: number;
     entitlementStartsAt: string;
     entitlementExpiresAt: string;
-  };
+  } | null;
 };
 
 export type AcceptedAssessment = {
