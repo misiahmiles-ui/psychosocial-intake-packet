@@ -15,6 +15,11 @@ import {
   type AssessmentClaim
 } from "@/types/assessment";
 import { getAssessmentGenerationConfig } from "@/lib/assessmentUsage";
+import {
+  AssessmentDeadlineExpiredError,
+  AssessmentRequestAbortedError,
+  runWithAssessmentDeadline
+} from "@/lib/assessmentDeadline";
 import { scanSerializedOutboundPayload } from "@/lib/assessment";
 import type { AssessmentRequest } from "@/types/assessment";
 
@@ -108,10 +113,11 @@ const assessmentSchema = {
   }
 } as const;
 
-// Netlify's production handler terminated the synchronous request at about 30
-// seconds. Keep the provider deadline below that boundary so the route can
-// return a PHI-safe JSON timeout and release a customer reservation itself.
-const PLATFORM_RESPONSE_DEADLINE_MS = 25_000;
+// One budget covers every attempt, retry delay, and response handling. Leave
+// room after provider work for output validation and the HTTP response.
+const OVERALL_GENERATION_DEADLINE_MS = 42_000;
+const MINIMUM_RETRY_REMAINING_MS = 12_000;
+const RETRY_DELAY_MS = 250;
 
 export async function generateAssessmentClaims(
   assessmentRequest: AssessmentRequest,
@@ -120,38 +126,31 @@ export async function generateAssessmentClaims(
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new AssessmentProviderError("configuration");
 
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    try {
-      return await makeResponsesApiCall(assessmentRequest, apiKey, requestSignal);
-    } catch (error) {
-      if (
-        !(error instanceof AssessmentProviderError) ||
-        error.failure === "aborted" ||
-        error.failure === "configuration" ||
-        error.failure === "privacy_blocked" ||
-        attempt === 1
-      ) {
-        throw error;
+  try {
+    return await runWithAssessmentDeadline(
+      (signal) => makeResponsesApiCall(assessmentRequest, apiKey, signal),
+      {
+        minimumRetryRemainingMs: MINIMUM_RETRY_REMAINING_MS,
+        requestSignal,
+        retryDelayMs: RETRY_DELAY_MS,
+        shouldRetry: (error) =>
+          error instanceof AssessmentProviderError &&
+          !["aborted", "configuration", "privacy_blocked", "timeout"].includes(error.failure),
+        timeoutMs: Math.min(getAssessmentGenerationConfig().timeoutMs, OVERALL_GENERATION_DEADLINE_MS)
       }
-    }
+    );
+  } catch (error) {
+    if (error instanceof AssessmentDeadlineExpiredError) throw new AssessmentProviderError("timeout");
+    if (error instanceof AssessmentRequestAbortedError) throw new AssessmentProviderError("aborted");
+    throw error;
   }
-  throw new AssessmentProviderError("unavailable");
 }
 
 async function makeResponsesApiCall(
   assessmentRequest: AssessmentRequest,
   apiKey: string,
-  requestSignal?: AbortSignal
+  signal: AbortSignal
 ) {
-  const controller = new AbortController();
-  let timedOut = false;
-  const timeout = setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, Math.min(getAssessmentGenerationConfig().timeoutMs, PLATFORM_RESPONSE_DEADLINE_MS));
-  const abortForRequest = () => controller.abort();
-  requestSignal?.addEventListener("abort", abortForRequest, { once: true });
-
   try {
     const facts = assessmentRequest.facts;
     const requestBody = {
@@ -199,7 +198,7 @@ async function makeResponsesApiCall(
         "Content-Type": "application/json"
       },
       body: serializedBody,
-      signal: controller.signal
+      signal
     });
 
     if (!response.ok) throw new AssessmentProviderError("unavailable");
@@ -220,12 +219,8 @@ async function makeResponsesApiCall(
     return parsed.claims as AssessmentClaim[];
   } catch (error) {
     if (error instanceof AssessmentProviderError) throw error;
-    if (requestSignal?.aborted) throw new AssessmentProviderError("aborted");
-    if (timedOut) throw new AssessmentProviderError("timeout");
+    if (signal.aborted) throw new AssessmentProviderError("aborted");
     throw new AssessmentProviderError("unavailable");
-  } finally {
-    clearTimeout(timeout);
-    requestSignal?.removeEventListener("abort", abortForRequest);
   }
 }
 

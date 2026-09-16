@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 const read = (path) => readFileSync(path, "utf8");
 const endpoint = read("app/api/assessment/generate/route.ts");
 const provider = read("lib/assessmentProvider.ts");
+const deadline = read("lib/assessmentDeadline.ts");
 const usage = read("lib/assessmentUsage.ts");
 const policy = read("lib/assessmentEntitlementPolicy.ts");
 const access = read("lib/assessmentAccess.ts");
@@ -42,10 +43,13 @@ const checks = [
   }],
   ["provider bounds output for the synchronous production handler", () => assert.match(provider, /max_output_tokens: 3000/)],
   ["provider uses low reasoning effort for timely structured output", () => assert.match(provider, /reasoning: \{ effort: "low" \}/)],
-  ["provider has an abortable pre-platform timeout", () => {
-    assert.match(provider, /PLATFORM_RESPONSE_DEADLINE_MS = 25_000/);
-    assert.match(provider, /Math\.min\(getAssessmentGenerationConfig\(\)\.timeoutMs, PLATFORM_RESPONSE_DEADLINE_MS\)/);
-    assert.match(provider, /setTimeout[\s\S]*controller\.abort/);
+  ["provider uses one deadline for both attempts and response handling", () => {
+    assert.match(provider, /OVERALL_GENERATION_DEADLINE_MS = 42_000/);
+    assert.match(provider, /runWithAssessmentDeadline\(/);
+    assert.match(provider, /MINIMUM_RETRY_REMAINING_MS = 12_000/);
+    assert.doesNotMatch(provider, /setTimeout\(/);
+    assert.match(deadline, /const deadlineAt = performance\.now\(\) \+ options\.timeoutMs/);
+    assert.match(deadline, /Promise\.race\(\[runAttempts\(\), interruption\]\)/);
   }],
   ["provider errors never include the provider response body", () => assert.doesNotMatch(provider, /response\.text|console\./)],
   ["initial entitlement defaults are centralized", () => {
