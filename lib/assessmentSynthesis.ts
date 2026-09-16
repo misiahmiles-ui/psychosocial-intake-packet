@@ -1,5 +1,6 @@
 import { sourceMappingInventory, scanGeneratedClaims } from "@/lib/assessment";
 import type { AssessmentFact } from "@/types/assessment";
+import { semanticReviewIssues, type SemanticReview } from "@/lib/assessmentSemanticReview";
 
 // The model supplies prose once, with direct immutable source IDs. There is no
 // second copy of the narrative or model-authored polarity/provenance metadata.
@@ -9,7 +10,7 @@ export type SynthesisBlock = {
   text: string;
   sourceFactIds: string[];
 };
-export type AssessmentSynthesis = { blocks: SynthesisBlock[] };
+export type AssessmentSynthesis = { blocks: SynthesisBlock[]; semanticReview?: SemanticReview };
 
 const slug = (value: string) => value.replace(/([a-z])([A-Z])/g, "$1-$2").replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase();
 const labels = new Map(sourceMappingInventory().map((source) => [slug(source.path), source.fieldLabel]));
@@ -19,7 +20,7 @@ export function sourceEvidenceText(fact: AssessmentFact) {
 export function sourceEvidenceLabel(fact: AssessmentFact) { return labels.get(fact.sourceField) ?? fact.sourceField.replace(/-/g, " "); }
 
 export function parseAssessmentSynthesis(value: unknown): AssessmentSynthesis | null {
-  if (!record(value) || Object.keys(value).length !== 1 || !Array.isArray(value.blocks) || value.blocks.length > 11) return null;
+  if (!record(value) || Object.keys(value).some((key) => !["blocks", "semanticReview"].includes(key)) || !Array.isArray(value.blocks) || value.blocks.length > 11) return null;
   const blocks: SynthesisBlock[] = [];
   for (const raw of value.blocks) {
     if (!record(raw) || Object.keys(raw).length !== 3 ||
@@ -33,7 +34,7 @@ export function parseAssessmentSynthesis(value: unknown): AssessmentSynthesis | 
   const count = (section: SynthesisBlock["section"]) => blocks.filter((block) => block.section === section).length;
   if (count("assessment") < 3 || count("assessment") > 5 || count("strengths") > 1 ||
     count("needs") > 1 || count("plan") < 2 || count("plan") > 4) return null;
-  return { blocks };
+  return { blocks, ...(value.semanticReview === undefined ? {} : { semanticReview: value.semanticReview as SemanticReview }) };
 }
 
 const DENIAL = /\b(?:no|not|denies?|denied|without|none|negative|absent)\b/i;
@@ -75,6 +76,10 @@ export function validateAssessmentSynthesis(candidate: unknown, facts: Assessmen
   const synthesis = parseAssessmentSynthesis(candidate);
   const issues: string[] = [];
   if (!synthesis) return { valid: false, issues: ["invalid_synthesis_shape"] };
+  const reviewIssues = synthesis.semanticReview === undefined ? null : semanticReviewIssues(synthesis.semanticReview, synthesis.blocks.length);
+  if (reviewIssues) issues.push(...reviewIssues);
+  const semanticallyReviewed = reviewIssues !== null && reviewIssues.length === 0;
+  const semanticIssue = (issue: string) => { if (!semanticallyReviewed) issues.push(issue); };
   const ledger = new Map(facts.map((fact) => [fact.id, fact]));
   for (const block of synthesis.blocks) {
     const sources = block.sourceFactIds.map((id) => ledger.get(id)).filter((fact): fact is AssessmentFact => Boolean(fact));
@@ -87,24 +92,24 @@ export function validateAssessmentSynthesis(candidate: unknown, facts: Assessmen
     const sourceNumbers = new Set<string>(values.match(/\b\d+(?:\.\d+)?\b/g) ?? []);
     for (const sentence of sentences(block.text)) {
       const relevant = sources.filter((fact) => related(sentence, fact) > 0);
-      if (!relevant.length) { issues.push("unsupported_statement"); continue; }
+      if (!relevant.length) semanticIssue("unsupported_statement");
       const relevantValues = relevant.map((fact) => fact.normalizedValue).join(" ");
       const sentenceTokens = tokens(sentence);
       const authorityTokens = tokens(authority);
-      if (sentenceTokens.size > 2 && [...sentenceTokens].filter((token) => authorityTokens.has(token)).length / sentenceTokens.size < 0.12) issues.push("unsupported_statement");
+      if (sentenceTokens.size > 2 && [...sentenceTokens].filter((token) => authorityTokens.has(token)).length / sentenceTokens.size < 0.12) semanticIssue("unsupported_statement");
       for (const number of sentence.match(/\b\d+(?:\.\d+)?\b/g) ?? []) {
         if (!sourceNumbers.has(number)) issues.push("unsupported_numeric");
       }
       for (const relationship of sentence.match(RELATIONSHIPS) ?? []) {
-        if (!new RegExp(`\\b${relationship}\\b`, "i").test(values)) issues.push("unsupported_relationship");
+        if (!new RegExp(`\\b${relationship}\\b`, "i").test(values)) semanticIssue("unsupported_relationship");
       }
       for (const concept of CONCEPTS) {
         if (concept.test(sentence) && !concept.test(authority)) issues.push("unsupported_clinical_concept");
         if (!plan && concept.test(sentence)) {
           const conceptSources = relevant.filter((fact) => concept.test(sourceEvidenceText(fact)));
-          if (conceptSources.length && conceptSources.every((fact) => fact.semantics.polarity === "denied") && !DENIAL.test(sentence)) issues.push("denial_changed_to_positive");
-          if (conceptSources.length && conceptSources.every((fact) => fact.semantics.polarity === "affirmed" && !DENIAL.test(fact.normalizedValue)) && DENIAL.test(sentence)) issues.push("affirmed_changed_to_denied");
-          if (conceptSources.length && conceptSources.every((fact) => HISTORY.test(fact.normalizedValue) || ["historical", "lifetime"].includes(fact.temporalStatus)) && !HISTORY.test(sentence)) issues.push("historical_fact_made_current");
+          if (conceptSources.length && conceptSources.every((fact) => fact.semantics.polarity === "denied") && !DENIAL.test(sentence)) semanticIssue("denial_changed_to_positive");
+          if (conceptSources.length && conceptSources.every((fact) => fact.semantics.polarity === "affirmed" && !DENIAL.test(fact.normalizedValue)) && DENIAL.test(sentence)) semanticIssue("affirmed_changed_to_denied");
+          if (conceptSources.length && conceptSources.every((fact) => HISTORY.test(fact.normalizedValue) || ["historical", "lifetime"].includes(fact.temporalStatus)) && !HISTORY.test(sentence)) semanticIssue("historical_fact_made_current");
         }
       }
       if (DIAGNOSIS.test(sentence) && !sources.some((fact) =>
@@ -120,12 +125,12 @@ export function validateAssessmentSynthesis(candidate: unknown, facts: Assessmen
         if (COMMITMENT.test(sentence) && !COMMITMENT.test(relevantValues)) issues.push("unsupported_commitment");
         if (/\b(?:daily|weekly|monthly|sessions?|dosage|dose|mg)\b/i.test(sentence) && !/\b(?:daily|weekly|monthly|sessions?|dosage|dose|mg)\b/i.test(values)) issues.push("unsupported_treatment_detail");
       } else {
-        if (relevant.every((fact) => fact.semantics.polarity === "denied") && !DENIAL.test(sentence)) issues.push("denial_changed_to_positive");
-        if (relevant.every((fact) => fact.semantics.polarity === "affirmed" && !DENIAL.test(fact.normalizedValue)) && DENIAL.test(sentence) && !UNKNOWN.test(sentence)) issues.push("affirmed_changed_to_denied");
-        if (relevant.every((fact) => ["unknown", "not_assessed"].includes(fact.semantics.polarity)) && !UNKNOWN.test(sentence)) issues.push("unknown_made_known");
-        if (relevant.every((fact) => ["historical", "lifetime"].includes(fact.temporalStatus)) && !HISTORY.test(sentence)) issues.push("historical_fact_made_current");
-        if (relevant.every((fact) => fact.sourceType === "caregiver_report") && !/\b(?:caregiver|family)\s+(?:reports?|reported|states?|stated)/i.test(sentence)) issues.push("source_attribution_changed");
-        if (relevant.every((fact) => fact.sourceType === "participant_report") && !/\b(?:participant|self)[- ]report|\bparticipant\s+(?:reports?|reported|states?|stated|describes?)/i.test(sentence)) issues.push("source_attribution_changed");
+        if (relevant.every((fact) => fact.semantics.polarity === "denied") && !DENIAL.test(sentence)) semanticIssue("denial_changed_to_positive");
+        if (relevant.every((fact) => fact.semantics.polarity === "affirmed" && !DENIAL.test(fact.normalizedValue)) && DENIAL.test(sentence) && !UNKNOWN.test(sentence)) semanticIssue("affirmed_changed_to_denied");
+        if (relevant.every((fact) => ["unknown", "not_assessed"].includes(fact.semantics.polarity)) && !UNKNOWN.test(sentence)) semanticIssue("unknown_made_known");
+        if (relevant.every((fact) => ["historical", "lifetime"].includes(fact.temporalStatus)) && !HISTORY.test(sentence)) semanticIssue("historical_fact_made_current");
+        if (relevant.every((fact) => fact.sourceType === "caregiver_report") && !/\b(?:caregiver|family)\s+(?:reports?|reported|states?|stated)/i.test(sentence)) semanticIssue("source_attribution_changed");
+        if (relevant.every((fact) => fact.sourceType === "participant_report") && !/\b(?:participant|self)[- ]report|\bparticipant\s+(?:reports?|reported|states?|stated|describes?)/i.test(sentence)) semanticIssue("source_attribution_changed");
       }
     }
   }

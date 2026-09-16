@@ -2,7 +2,7 @@ import "server-only";
 
 type ProviderTimingEvent = {
   runId: string;
-  phase: "request" | "headers" | "body" | "provider_result" | "attempt_failure" | "complete" | "failure";
+  phase: "request" | "headers" | "body" | "provider_result" | "attempt_failure" | "complete" | "failure" | "grounding_headers" | "grounding_complete";
   attempt?: number;
   elapsedMs?: number;
   phaseMs?: number;
