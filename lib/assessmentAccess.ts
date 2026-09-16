@@ -79,13 +79,6 @@ export async function authorizeAssessmentGeneration(
     )
     .eq("id", user.id)
     .maybeSingle<ProfileAccessRow>();
-  if (profileError) {
-    return {
-      authorized: false,
-      error: "Account access could not be verified.",
-      status: 503
-    };
-  }
 
   const appMetadata = user.app_metadata as Record<string, unknown>;
   const owner = resolveOwnerAuthorization({
@@ -98,6 +91,14 @@ export async function authorizeAssessmentGeneration(
       entitlementActivation: null,
       isOwner: true,
       userId: user.id
+    };
+  }
+
+  if (profileError) {
+    return {
+      authorized: false,
+      error: "Account access could not be verified.",
+      status: 503
     };
   }
 
