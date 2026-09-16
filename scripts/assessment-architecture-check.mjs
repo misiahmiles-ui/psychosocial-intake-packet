@@ -33,8 +33,8 @@ const checks = [
   ["provider disables response storage", () => assert.match(provider, /store: false/)],
   ["provider uses strict JSON Schema structured output", () => assert.match(provider, /strict: true[\s\S]*type: "json_schema"/)],
   ["provider keeps instructions separate from structured facts", () => {
-    assert.match(provider, /instructions: ASSESSMENT_INSTRUCTIONS/);
-    assert.match(provider, /type: "input_text"[\s\S]*JSON\.stringify\(\{ sourceFacts: providerFacts \}\)/);
+    assert.match(provider, /const instructions = synthesisMode \? SYNTHESIS_INSTRUCTIONS : ASSESSMENT_INSTRUCTIONS/);
+    assert.match(provider, /type: "input_text"[\s\S]*JSON\.stringify\(\{ sourceFacts:/);
     assert.match(provider, /const providerFacts = compactFactsForProvider\(facts\)/);
     assert.doesNotMatch(provider, /ASSESSMENT_INSTRUCTIONS\s*\+/);
   }],
@@ -67,7 +67,7 @@ const checks = [
     assert.doesNotMatch(providerTelemetry, /console\.(?:warn|error|debug)/);
   }],
   ["grounding failure telemetry logs fixed codes instead of claim content", () => {
-    assert.match(endpoint, /recordAssessmentValidationFailure\(claimValidation\.issues, claims\.length\)/);
+    assert.match(endpoint, /recordAssessmentValidationFailure\(claimValidation\.issues, synthesis\?\.blocks\.length \?\? claims\.length\)/);
     assert.doesNotMatch(validationTelemetry, /console\.(?:warn|error|debug)|console\.info\([^\n]*issues/);
     assert.match(validationTelemetry, /categories: classifyAssessmentValidationIssues\(issues\)/);
   }],

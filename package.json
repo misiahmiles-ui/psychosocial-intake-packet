@@ -13,6 +13,7 @@
     "test:assessment-architecture": "node scripts/assessment-architecture-check.mjs",
     "test:assessment-deadline": "node scripts/assessment-deadline-check.mts",
     "test:assessment-provider-draft": "node scripts/assessment-provider-draft-check.mjs",
+    "test:assessment-synthesis": "node scripts/assessment-synthesis-check.mjs",
     "test:assessment-validation-telemetry": "node scripts/assessment-validation-telemetry-check.mjs",
     "test:owner-assessment-entitlement": "node scripts/owner-assessment-entitlement-check.mjs",
     "verify:assessment-pdf": "tsc -p scripts/tsconfig.pdf-verification.json && node tmp/pdf-verification-build/scripts/pdf-verification-fixture.js tmp/assessment-final-verification.pdf",

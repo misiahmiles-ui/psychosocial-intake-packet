@@ -1,6 +1,23 @@
 import "server-only";
 
 const ISSUE_RULES = [
+  ["synthesis_shape", /^invalid_synthesis_shape$/],
+  ["unsupported_statement", /^unsupported_statement$/],
+  ["source_attribution_changed", /^source_attribution_changed$/],
+  ["authoritative_safety_boundary", /^authoritative_safety_boundary$/],
+  ["screening_boundary", /^screening_boundary$/],
+  ["unsupported_numeric", /^unsupported_numeric$/],
+  ["unsupported_diagnosis", /^unsupported_diagnosis$/],
+  ["unsupported_relationship", /^unsupported_relationship$/],
+  ["unsupported_clinical_concept", /^unsupported_clinical_concept$/],
+  ["unsupported_commitment", /^unsupported_commitment$/],
+  ["unsupported_treatment_detail", /^unsupported_treatment_detail$/],
+  ["plan_not_prospective", /^plan_not_prospective$/],
+  ["missing_source", /^missing_source$/],
+  ["denial_changed_to_positive", /^denial_changed_to_positive$/],
+  ["affirmed_changed_to_denied", /^affirmed_changed_to_denied$/],
+  ["unknown_made_known", /^unknown_made_known$/],
+  ["historical_fact_made_current", /^historical_fact_made_current$/],
   ["unsupported_numeric", /introduces unsupported numeric information/],
   ["unsupported_diagnosis", /makes an unsupported diagnostic statement/],
   ["screening_boundary", /exceeds the cognitive-screening boundary/],
@@ -29,5 +46,14 @@ export function recordAssessmentValidationFailure(issues: string[], claimCount: 
     claimCount,
     issueCount: issues.length,
     categories: classifyAssessmentValidationIssues(issues)
+  }));
+}
+
+export function recordAssessmentValidationSuccess(elapsedMs: number, owner: boolean, synthesis: boolean) {
+  console.info("assessment_validation_success", JSON.stringify({
+    elapsedMs: Math.max(0, Math.round(elapsedMs)),
+    format: synthesis ? "synthesis-v1" : "claims-v1",
+    grounding: "passed", safety: "passed", screening: "passed", outputPhi: "passed",
+    owner, chargedCredits: owner ? 0 : 1
   }));
 }
