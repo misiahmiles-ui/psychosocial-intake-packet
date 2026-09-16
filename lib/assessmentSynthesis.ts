@@ -10,7 +10,8 @@ export type SynthesisBlock = {
   text: string;
   sourceFactIds: string[];
 };
-export type AssessmentSynthesis = { blocks: SynthesisBlock[]; semanticReview?: SemanticReview };
+export type AssessmentSynthesis = { blocks: SynthesisBlock[]; semanticReview?: SemanticReview; renderMode?: "source-ledger" };
+export type AssessmentSourceSelection = { paragraphs: { sourceFactIds: string[] }[] };
 
 const slug = (value: string) => value.replace(/([a-z])([A-Z])/g, "$1-$2").replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase();
 const labels = new Map(sourceMappingInventory().map((source) => [slug(source.path), source.fieldLabel]));
@@ -20,13 +21,15 @@ export function sourceEvidenceText(fact: AssessmentFact) {
 export function sourceEvidenceLabel(fact: AssessmentFact) { return labels.get(fact.sourceField) ?? fact.sourceField.replace(/-/g, " "); }
 
 export function parseAssessmentSynthesis(value: unknown): AssessmentSynthesis | null {
-  if (!record(value) || Object.keys(value).some((key) => !["blocks", "semanticReview"].includes(key)) || !Array.isArray(value.blocks) || value.blocks.length > 11) return null;
+  if (!record(value) || Object.keys(value).some((key) => !["blocks", "semanticReview", "renderMode"].includes(key)) || !Array.isArray(value.blocks) || value.blocks.length > 11 ||
+    (value.renderMode !== undefined && value.renderMode !== "source-ledger")) return null;
+  const sourceLedger = value.renderMode === "source-ledger";
   const blocks: SynthesisBlock[] = [];
   for (const raw of value.blocks) {
     if (!record(raw) || Object.keys(raw).length !== 3 ||
       !SYNTHESIS_SECTIONS.includes(raw.section as never) || typeof raw.text !== "string" ||
-      raw.text.trim().length < 5 || raw.text.length > 1100 || /\n/.test(raw.text) ||
-      sentences(raw.text).length !== 1 ||
+      raw.text.trim().length < 5 || raw.text.length > (sourceLedger ? 2400 : 1100) || /\n/.test(raw.text) ||
+      (!sourceLedger && sentences(raw.text).length !== 1) ||
       !Array.isArray(raw.sourceFactIds) || raw.sourceFactIds.length < 1 || raw.sourceFactIds.length > 16 ||
       raw.sourceFactIds.some((id) => typeof id !== "string" || !/^fact-\d{3}$/.test(id)) ||
       new Set(raw.sourceFactIds).size !== raw.sourceFactIds.length) return null;
@@ -35,7 +38,61 @@ export function parseAssessmentSynthesis(value: unknown): AssessmentSynthesis | 
   const count = (section: SynthesisBlock["section"]) => blocks.filter((block) => block.section === section).length;
   if (count("assessment") < 3 || count("assessment") > 5 || count("strengths") > 1 ||
     count("needs") > 1 || count("plan") < 2 || count("plan") > 4) return null;
-  return { blocks, ...(value.semanticReview === undefined ? {} : { semanticReview: value.semanticReview as SemanticReview }) };
+  return { blocks, ...(value.semanticReview === undefined ? {} : { semanticReview: value.semanticReview as SemanticReview }),
+    ...(sourceLedger ? { renderMode: "source-ledger" as const } : {}) };
+}
+
+const SOURCE_ID = /^fact-\d{3}$/;
+const STRENGTH_FIELDS = ["psychosocial-strengths-coping", "home-visit-group-community-supports"];
+const NEED_FIELDS = ["psychosocial-current-stressors", "goals-social-work-services-needed"];
+const PLAN_FIELDS = ["goals-participant-family-goals", "goals-social-work-services-needed", "goals-service-priorities", "quarterly-discharge-supportive-services"];
+function selectedFacts(facts: AssessmentFact[], fields: string[], limit: number) {
+  return fields.map((field) => facts.find((fact) => fact.sourceField === field))
+    .filter((fact): fact is AssessmentFact => Boolean(fact && !["denied", "unknown", "not_assessed", "not_applicable"].includes(fact.semantics.polarity)))
+    .slice(0, limit);
+}
+function sourceLedgerText(section: SynthesisBlock["section"], sources: AssessmentFact[]) {
+  return sources.map((fact) => {
+    const value = fact.normalizedValue.trim().replace(/\s+/g, " ").replace(/[.!?]+$/, "");
+    const label = sourceEvidenceLabel(fact);
+    return section === "plan"
+      ? `For clinician review, consider the documented ${label.toLowerCase()}: ${value}.`
+      : `${label}: ${value}.`;
+  }).join(" ");
+}
+export function parseAssessmentSourceSelection(value: unknown): AssessmentSourceSelection | null {
+  if (!record(value) || Object.keys(value).length !== 1 || !Array.isArray(value.paragraphs) ||
+    value.paragraphs.length < 3 || value.paragraphs.length > 5) return null;
+  const seen = new Set<string>();
+  for (const paragraph of value.paragraphs) {
+    if (!record(paragraph) || Object.keys(paragraph).length !== 1 || !Array.isArray(paragraph.sourceFactIds) ||
+      paragraph.sourceFactIds.length < 1 || paragraph.sourceFactIds.length > 4) return null;
+    for (const id of paragraph.sourceFactIds) {
+      if (typeof id !== "string" || !SOURCE_ID.test(id) || seen.has(id)) return null;
+      seen.add(id);
+    }
+  }
+  return value as AssessmentSourceSelection;
+}
+export function buildSourceLedgerSynthesis(selection: AssessmentSourceSelection, facts: AssessmentFact[]): AssessmentSynthesis | null {
+  const ledger = new Map(facts.map((fact) => [fact.id, fact]));
+  const blocks: SynthesisBlock[] = [];
+  for (const paragraph of selection.paragraphs) {
+    const sources = paragraph.sourceFactIds.map((id) => ledger.get(id));
+    if (sources.some((fact) => !fact || ["safety", "cognitive_screening"].includes(fact.domain))) return null;
+    const resolved = sources as AssessmentFact[];
+    blocks.push({ section: "assessment", text: sourceLedgerText("assessment", resolved), sourceFactIds: paragraph.sourceFactIds });
+  }
+  for (const [section, fields, limit] of [["strengths", STRENGTH_FIELDS, 2], ["needs", NEED_FIELDS, 2], ["plan", PLAN_FIELDS, 4]] as const) {
+    const chosen = selectedFacts(facts, fields, limit);
+    if (section === "plan" && chosen.length < 2) return null;
+    if (section === "plan") {
+      for (const fact of chosen) blocks.push({ section, text: sourceLedgerText(section, [fact]), sourceFactIds: [fact.id] });
+    } else if (chosen.length) {
+      blocks.push({ section, text: sourceLedgerText(section, chosen), sourceFactIds: chosen.map((fact) => fact.id) });
+    }
+  }
+  return { blocks, renderMode: "source-ledger" };
 }
 
 const DENIAL = /\b(?:no|not|denies?|denied|without|none|negative|absent)\b/i;
@@ -86,6 +143,17 @@ export function validateAssessmentSynthesis(candidate: unknown, facts: Assessmen
   if (!synthesis) return { valid: false, issues: ["invalid_synthesis_shape"] };
   const reviewIssues = synthesis.semanticReview === undefined ? null : semanticReviewIssues(synthesis.semanticReview, synthesis.blocks.length);
   if (reviewIssues) issues.push(...reviewIssues);
+  if (synthesis.renderMode === "source-ledger") {
+    if (synthesis.semanticReview !== undefined) issues.push("invalid_synthesis_shape");
+    const paragraphs = synthesis.blocks.filter((block) => block.section === "assessment");
+    const selection = parseAssessmentSourceSelection({ paragraphs: paragraphs.map((block) => ({ sourceFactIds: block.sourceFactIds })) });
+    const expected = selection && buildSourceLedgerSynthesis(selection, facts);
+    if (!expected || expected.blocks.length !== synthesis.blocks.length ||
+      expected.blocks.some((block, index) => block.section !== synthesis.blocks[index].section ||
+        block.text !== synthesis.blocks[index].text ||
+        block.sourceFactIds.join("|") !== synthesis.blocks[index].sourceFactIds.join("|"))) issues.push("source_ledger_mismatch");
+    return { valid: issues.length === 0, issues };
+  }
   const semanticallyReviewed = reviewIssues !== null && reviewIssues.length === 0;
   const semanticIssue = (issue: string) => { if (!semanticallyReviewed) issues.push(issue); };
   const ledger = new Map(facts.map((fact) => [fact.id, fact]));

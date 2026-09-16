@@ -11,6 +11,7 @@ const ISSUE_RULES = [
   ["semantic_unsupported_plan", /^semantic_unsupported_plan$/],
   ["semantic_safety_changed", /^semantic_safety_changed$/],
   ["synthesis_shape", /^invalid_synthesis_shape$/],
+  ["source_ledger_mismatch", /^source_ledger_mismatch$/],
   ["unsupported_statement", /^unsupported_statement$/],
   ["source_attribution_changed", /^source_attribution_changed$/],
   ["authoritative_safety_boundary", /^authoritative_safety_boundary$/],
@@ -61,7 +62,7 @@ export function recordAssessmentValidationFailure(issues: string[], claimCount: 
 export function recordAssessmentValidationSuccess(
   elapsedMs: number,
   owner: boolean,
-  format: "claims-v1" | "synthesis-v1" | "synthesis-v2" | "synthesis-v3"
+  format: "claims-v1" | "synthesis-v1" | "synthesis-v2" | "synthesis-v3" | "synthesis-v4"
 ) {
   console.info("assessment_validation_success", JSON.stringify({
     elapsedMs: Math.max(0, Math.round(elapsedMs)),

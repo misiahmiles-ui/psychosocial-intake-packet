@@ -200,7 +200,7 @@ export function AssessmentWorkflow({
         credentials: "same-origin",
         headers: {
           Authorization: `Bearer ${session.access_token}`,
-          ...(jurisdiction === "NJ" ? { "X-Assessment-Format": "synthesis-v3" } : {}),
+          ...(jurisdiction === "NJ" ? { "X-Assessment-Format": "synthesis-v4" } : {}),
           "Content-Type": "application/json"
         },
         body: JSON.stringify(requestBody),
