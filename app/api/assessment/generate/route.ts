@@ -17,6 +17,7 @@ import {
   AssessmentProviderError,
   generateAssessmentClaims
 } from "@/lib/assessmentProvider";
+import { recordAssessmentValidationFailure } from "@/lib/assessmentValidationTelemetry";
 import {
   completeAssessmentGeneration,
   releaseAssessmentGeneration,
@@ -138,6 +139,7 @@ export async function POST(request: Request) {
     );
     const claimValidation = validateClaims(claims, assessmentRequest.facts);
     if (!claimValidation.valid) {
+      recordAssessmentValidationFailure(claimValidation.issues, claims.length);
       return failure(
         "The generated assessment did not pass source-grounding validation. No generation was charged.",
         502,
