@@ -15,19 +15,67 @@ Created by Marvin Miles, LSW.
 - Print action.
 - Final PDF export.
 - Mental status screening with automatic score and impairment level.
+- Optional PHI-reviewed, source-grounded psychosocial assessment generation.
 - Fictitious completed example at `/example`.
 - Company placeholders for headers, consent language, and exports.
 - Paid buyer access layer using Supabase Auth, Supabase profiles, and Stripe Checkout.
 
 ## Privacy note
 
-This app is local PDF export only. It does not save assessment information inside the web app, browser storage, backend, database, Netlify, cloud storage, cookies, analytics, logs, or service worker cache. Entered information remains active only in the current browser tab until the user downloads an Editable Draft PDF, exports a final PDF, prints, clears the form, refreshes, closes the tab, or navigates away.
+The intake and PDF workflow does not persist assessment information inside the app, browser storage, Supabase, Netlify forms, analytics, logs, or a clinical-record database. Entered information remains active only in the current browser tab until the user downloads an Editable Draft PDF, exports a final PDF, prints, clears the form, refreshes, closes the tab, or navigates away.
+
+The optional assessment generator is the one exception to a fully local workflow: after a clinician completes the PHI Review Gate, the app sends only the temporary, de-identified, structured fact set to its server-side generation endpoint and then to the configured OpenAI project. The full intake packet, participant identity fields, generated narrative, clinician edits, and final PDF are not stored in the quota ledger. The generated assessment returns to volatile browser state for clinician review and local final-PDF export.
 
 Supabase is used only for buyer account login and paid access status. Stripe is used only for payment checkout. Do not add client/member/participant assessment fields, uploaded logos, completed packets, draft packets, or PHI to Supabase, Stripe metadata, Netlify forms, analytics, logs, or any backend.
 
 Use Download Editable Draft PDF if work needs to continue later. The unfinished intake is saved only inside the downloaded PDF file controlled by the clinician or agency. Save downloaded PDFs only to an approved company hard drive, secure shared drive, or encrypted flash drive according to agency policy.
 
 This is a privacy-conscious/no-retention workflow design, not a HIPAA compliance certification. HIPAA-compliant deployment would require separate hosting, security, business associate agreement, compliance, and agency policy review.
+
+## Psychosocial assessment generation
+
+The assessment generator follows the existing LeanMaster Integrated Note Engine integration pattern without importing LeanMaster code or depending on its repository at runtime:
+
+- OpenAI access is server-side only through the Responses API.
+- `OPENAI_API_KEY` and `OPENAI_MODEL` are read only from this application's server environment.
+- Strict JSON Schema structured output is validated again against the transmitted source facts before any result is accepted.
+- Requests use an abortable timeout, one bounded retry, sanitized errors, `store: false`, and no request/response-body logging.
+- OpenAI instructions and the untrusted structured fact payload are kept separate.
+- A final exact-payload PHI scan runs immediately before the outbound request, followed by source-grounding and output-PHI validation after generation.
+
+`store: false` is an API request setting, not a legal, HIPAA, Business Associate Agreement, or zero-retention guarantee. The product owner and each agency must independently review the configured OpenAI account/project, data controls, contracts, hosting, and policies before production use.
+
+### Generation quota
+
+The initial rule is 30 successfully generated and validated Psychosocial Assessments per authenticated user per America/New_York calendar month, with no rollover. The default lives in `lib/assessmentUsage.ts` and can be overridden centrally with `PSYCHOSOCIAL_ASSESSMENT_MONTHLY_LIMIT`; it is not repeated throughout the UI.
+
+Only a completed, validated result consumes one generation. PHI blocks, safety-conflict blocks, provider failures, timeouts, aborted requests, and validation failures release the reservation and do not consume monthly quota. A successful clinician-requested regeneration is a new successful generation and consumes one more. Failed attempts remain briefly as account-level, nonclinical rate-limit events so repeated failures cannot bypass abuse controls; they are not counted as successful monthly usage.
+
+### Owner setup for Netlify and Supabase
+
+Do not deploy this feature until the owner has reviewed the branch and completed these steps:
+
+1. Open the existing Supabase project used by this Psychosocial Intake application.
+2. In **SQL Editor**, create a new query, paste `supabase/migrations/20260915_psychosocial_assessment_quota.sql`, and run it once.
+3. In **Table Editor**, verify `psychosocial_assessment_generation_events` contains account/quota metadata only (`id`, `user_id`, `quota_month`, `status`, `reserved_at`, and `completed_at`) and has row-level security enabled.
+4. In the Netlify site for this application, open **Site configuration → Environment variables**.
+5. Add `OPENAI_API_KEY` as a server-only value. It may be a key from the same approved OpenAI account/project/billing source used by LeanMaster, but it must be configured independently for this Netlify site. Never use a `NEXT_PUBLIC_` prefix.
+6. Add or confirm `OPENAI_MODEL`, `PSYCHOSOCIAL_ASSESSMENT_MONTHLY_LIMIT=30`, `PSYCHOSOCIAL_ASSESSMENT_RAPID_LIMIT=5`, `PSYCHOSOCIAL_ASSESSMENT_RAPID_WINDOW_SECONDS=60`, `PSYCHOSOCIAL_ASSESSMENT_RESERVATION_TTL_SECONDS=600`, and `PSYCHOSOCIAL_ASSESSMENT_TIMEOUT_MS=75000`.
+7. Scope the variables to the intended Netlify contexts, save them, and redeploy only after review. Do not copy LeanMaster's `.env` file or source code into this repository.
+
+The API key never belongs in source code, browser code, a public environment variable, Supabase tables, Stripe metadata, or logs. Applying the migration and adding environment variables are manual owner actions; this branch does not change the live database or deploy the site.
+
+Run these checks before approving deployment:
+
+```bash
+pnpm run test:assessment-safeguards
+pnpm run test:assessment-architecture
+pnpm run typecheck
+pnpm build
+pnpm run verify:assessment-pdf
+```
+
+A live provider smoke test must be performed only after the separate server environment and quota migration are present. Use fictitious data, verify a successful result increments completed usage once, and verify a forced provider failure does not increment completed monthly usage.
 
 ## Editable draft PDF behavior
 
