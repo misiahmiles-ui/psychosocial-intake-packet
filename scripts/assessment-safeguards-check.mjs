@@ -195,6 +195,9 @@ test("mental-status facility review preserves adjacent narrative text", () => {
   const facilityFinding = workspace.findings.find((item) => item.kind === "person_name" && item.detectedText.includes("Harbor Wellness"));
   assert.ok(facilityFinding);
   assert.match(facilityFinding.snippet, /Correctly identified Harbor Wellness Adult Day Health Center\./);
+  const trailingFacilityFinding = workspace.findings.find((item) => item.kind === "person_name" && item.detectedText === "Health Center");
+  assert.ok(trailingFacilityFinding);
+  assert.equal(trailingFacilityFinding.snippet, "Correctly identified Harbor Wellness Adult Day Health Center.");
   const changed = assessment.replaceFindingInFacts([source], facilityFinding, "the program");
   assert.match(changed[0].normalizedValue, /Correctly identified the program/);
   assert.doesNotMatch(changed[0].normalizedValue, /notes: rrectly identified/);
