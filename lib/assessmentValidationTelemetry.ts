@@ -58,10 +58,14 @@ export function recordAssessmentValidationFailure(issues: string[], claimCount: 
   }));
 }
 
-export function recordAssessmentValidationSuccess(elapsedMs: number, owner: boolean, synthesis: boolean, semantic = false) {
+export function recordAssessmentValidationSuccess(
+  elapsedMs: number,
+  owner: boolean,
+  format: "claims-v1" | "synthesis-v1" | "synthesis-v2" | "synthesis-v3"
+) {
   console.info("assessment_validation_success", JSON.stringify({
     elapsedMs: Math.max(0, Math.round(elapsedMs)),
-    format: semantic ? "synthesis-v2" : synthesis ? "synthesis-v1" : "claims-v1",
+    format,
     grounding: "passed", safety: "passed", screening: "passed", outputPhi: "passed",
     owner, chargedCredits: owner ? 0 : 1
   }));
