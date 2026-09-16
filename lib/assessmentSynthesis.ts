@@ -73,6 +73,9 @@ function evidenceClauses(text: string) {
   return text.split(/\s+(?:and|but|while|whereas|although|including)\s+|,\s*(?:and|but|while|whereas|although|including)\s+/i)
     .map((part) => part.trim()).filter(Boolean);
 }
+function sourceDenies(fact: AssessmentFact) {
+  return fact.semantics.polarity === "denied" || DENIAL.test(fact.normalizedValue);
+}
 
 // Fail closed on provenance, clinical boundaries, attribution and unsupported
 // details. Labels are context for short form answers, never affirmative facts:
@@ -99,7 +102,29 @@ export function validateAssessmentSynthesis(candidate: unknown, facts: Assessmen
       // A supported opening clause must not lend its citation to a separate,
       // unsupported assertion later in the same sentence.
       for (const clause of evidenceClauses(sentence)) {
-        if (tokens(clause).size > 0 && !sources.some((fact) => related(clause, fact) > 0)) semanticIssue("unsupported_statement");
+        const relevant = sources.filter((fact) => related(clause, fact) > 0);
+        if (tokens(clause).size > 0 && !relevant.length) { semanticIssue("unsupported_statement"); continue; }
+        const clauseEvidence = relevant.map(sourceEvidenceText).join(" ");
+        for (const relationship of clause.match(RELATIONSHIPS) ?? []) {
+          // Short yes/no source values need their field label for context, but
+          // the whole sentence must not borrow a relationship from another clause.
+          if (!new RegExp(`\\b${relationship}\\b`, "i").test(clauseEvidence)) semanticIssue("unsupported_relationship");
+        }
+        for (const concept of CONCEPTS) {
+          if (concept.test(clause) && !concept.test(clauseEvidence)) issues.push("unsupported_clinical_concept");
+          if (!plan && concept.test(clause)) {
+            const conceptSources = relevant.filter((fact) => concept.test(sourceEvidenceText(fact)));
+            if (conceptSources.length && conceptSources.every(sourceDenies) && !DENIAL.test(clause)) semanticIssue("denial_changed_to_positive");
+            if (conceptSources.length && conceptSources.every((fact) => fact.semantics.polarity === "affirmed" && !sourceDenies(fact)) && DENIAL.test(clause)) semanticIssue("affirmed_changed_to_denied");
+            if (conceptSources.length && conceptSources.every((fact) => HISTORY.test(fact.normalizedValue) || ["historical", "lifetime"].includes(fact.temporalStatus)) && !HISTORY.test(clause)) semanticIssue("historical_fact_made_current");
+          }
+        }
+        if (!plan) {
+          if (relevant.every(sourceDenies) && !DENIAL.test(clause)) semanticIssue("denial_changed_to_positive");
+          if (relevant.every((fact) => fact.semantics.polarity === "affirmed" && !sourceDenies(fact)) && DENIAL.test(clause) && !UNKNOWN.test(clause)) semanticIssue("affirmed_changed_to_denied");
+          if (relevant.every((fact) => ["unknown", "not_assessed"].includes(fact.semantics.polarity)) && !UNKNOWN.test(clause)) semanticIssue("unknown_made_known");
+          if (relevant.every((fact) => ["historical", "lifetime"].includes(fact.temporalStatus)) && !HISTORY.test(clause)) semanticIssue("historical_fact_made_current");
+        }
       }
       const relevant = sources.filter((fact) => related(sentence, fact) > 0);
       if (!relevant.length) semanticIssue("unsupported_statement");
@@ -109,18 +134,6 @@ export function validateAssessmentSynthesis(candidate: unknown, facts: Assessmen
       if (sentenceTokens.size > 2 && [...sentenceTokens].filter((token) => authorityTokens.has(token)).length / sentenceTokens.size < 0.12) semanticIssue("unsupported_statement");
       for (const number of sentence.match(/\b\d+(?:\.\d+)?\b/g) ?? []) {
         if (!sourceNumbers.has(number)) issues.push("unsupported_numeric");
-      }
-      for (const relationship of sentence.match(RELATIONSHIPS) ?? []) {
-        if (!new RegExp(`\\b${relationship}\\b`, "i").test(values)) semanticIssue("unsupported_relationship");
-      }
-      for (const concept of CONCEPTS) {
-        if (concept.test(sentence) && !concept.test(authority)) issues.push("unsupported_clinical_concept");
-        if (!plan && concept.test(sentence)) {
-          const conceptSources = relevant.filter((fact) => concept.test(sourceEvidenceText(fact)));
-          if (conceptSources.length && conceptSources.every((fact) => fact.semantics.polarity === "denied") && !DENIAL.test(sentence)) semanticIssue("denial_changed_to_positive");
-          if (conceptSources.length && conceptSources.every((fact) => fact.semantics.polarity === "affirmed" && !DENIAL.test(fact.normalizedValue)) && DENIAL.test(sentence)) semanticIssue("affirmed_changed_to_denied");
-          if (conceptSources.length && conceptSources.every((fact) => HISTORY.test(fact.normalizedValue) || ["historical", "lifetime"].includes(fact.temporalStatus)) && !HISTORY.test(sentence)) semanticIssue("historical_fact_made_current");
-        }
       }
       if (DIAGNOSIS.test(sentence) && !sources.some((fact) =>
         (fact.semantics.diagnosisStatus === "documented_diagnosis" ||
@@ -135,10 +148,6 @@ export function validateAssessmentSynthesis(candidate: unknown, facts: Assessmen
         if (COMMITMENT.test(sentence) && !COMMITMENT.test(relevantValues)) issues.push("unsupported_commitment");
         if (/\b(?:daily|weekly|monthly|sessions?|dosage|dose|mg)\b/i.test(sentence) && !/\b(?:daily|weekly|monthly|sessions?|dosage|dose|mg)\b/i.test(values)) issues.push("unsupported_treatment_detail");
       } else {
-        if (relevant.every((fact) => fact.semantics.polarity === "denied") && !DENIAL.test(sentence)) semanticIssue("denial_changed_to_positive");
-        if (relevant.every((fact) => fact.semantics.polarity === "affirmed" && !DENIAL.test(fact.normalizedValue)) && DENIAL.test(sentence) && !UNKNOWN.test(sentence)) semanticIssue("affirmed_changed_to_denied");
-        if (relevant.every((fact) => ["unknown", "not_assessed"].includes(fact.semantics.polarity)) && !UNKNOWN.test(sentence)) semanticIssue("unknown_made_known");
-        if (relevant.every((fact) => ["historical", "lifetime"].includes(fact.temporalStatus)) && !HISTORY.test(sentence)) semanticIssue("historical_fact_made_current");
         if (relevant.every((fact) => fact.sourceType === "caregiver_report") && !/\b(?:caregiver|family)\s+(?:reports?|reported|states?|stated)/i.test(sentence)) semanticIssue("source_attribution_changed");
         if (relevant.every((fact) => fact.sourceType === "participant_report") && !/\b(?:participant|self)[- ]report|\bparticipant\s+(?:reports?|reported|states?|stated|describes?)/i.test(sentence)) semanticIssue("source_attribution_changed");
       }

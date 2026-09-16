@@ -61,6 +61,12 @@ test("uncited paragraph is blocked", () => rejects(altered("Lives alone.", []), 
 test("a multi-sentence block is rejected before it can hide an unsupported statement", () => rejects(altered("Lives alone in an apartment. Enjoys competitive swimming."), "invalid_synthesis_shape"));
 test("an unsupported detail cannot hide inside a supported sentence", () => rejects(altered("The participant lives alone in an apartment and enjoys competitive swimming."), "unsupported_statement"));
 test("two supported clauses can cite their respective source facts", () => assert.equal(synth.validateAssessmentSynthesis(altered("The participant lives alone in an apartment and enjoys music activities.", ["fact-001", "fact-002"]), facts).valid, true));
+test("a denied second clause does not negate an affirmed first clause", () => assert.equal(synth.validateAssessmentSynthesis(altered("The participant lives alone in an apartment and no interpreter is needed.", ["fact-001", "fact-004"]), facts).valid, true));
+test("a relationship stated by a yes-answer field retains its source context", () => {
+  const source = [...facts, fact(8, "supports-family-support", "Yes")];
+  assert.equal(synth.validateAssessmentSynthesis(altered("Family support is documented.", ["fact-008"]), source).valid, true);
+});
+test("an uncited relationship cannot borrow authority from a different clause", () => rejects(altered("The participant lives alone in an apartment and has a daughter.", ["fact-001", "fact-002"]), "unsupported_statement"));
 test("an unsupported plan detail cannot hide after a supported intervention", () => rejects(altered("Consider structured music activities to support socialization and add horseback riding.", ["fact-002", "fact-003"], "plan"), "unsupported_statement"));
 test("unrelated citations cannot establish a diagnosis", () => rejects(altered("The participant is diagnosed with bipolar disorder.", ["fact-007"]), "unsupported_clinical_concept"));
 test("unsupported relationship is blocked", () => rejects(altered("The participant lives with a daughter in an apartment."), "unsupported_relationship"));
