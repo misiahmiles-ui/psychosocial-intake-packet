@@ -728,8 +728,28 @@ function createFinding(
     start,
     end,
     detectedText,
-    snippet: fullText.slice(Math.max(0, start - 45), Math.min(fullText.length, end + 45))
+    snippet: createPhiSnippet(fullText, start, end)
   };
+}
+
+function createPhiSnippet(fullText: string, start: number, end: number) {
+  let snippetStart = Math.max(0, start - 45);
+  let snippetEnd = Math.min(fullText.length, end + 45);
+
+  // A fixed character window must not present a truncated word as if the
+  // underlying fact were corrupted. Extend only to the nearest word boundary.
+  while (snippetStart > 0 && isSnippetWordCharacter(fullText[snippetStart - 1]) && isSnippetWordCharacter(fullText[snippetStart])) {
+    snippetStart -= 1;
+  }
+  while (snippetEnd < fullText.length && isSnippetWordCharacter(fullText[snippetEnd - 1]) && isSnippetWordCharacter(fullText[snippetEnd])) {
+    snippetEnd += 1;
+  }
+
+  return fullText.slice(snippetStart, snippetEnd);
+}
+
+function isSnippetWordCharacter(character: string | undefined) {
+  return Boolean(character && /[\p{L}\p{N}]/u.test(character));
 }
 
 export function detectSafetyConflicts(facts: AssessmentFact[]): SafetyConflict[] {
