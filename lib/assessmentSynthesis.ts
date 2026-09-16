@@ -69,6 +69,10 @@ function related(text: string, fact: AssessmentFact) {
   return [...words].filter((word) => source.has(word)).length;
 }
 function sentences(text: string) { return text.split(/(?<=[.!?])\s+|;\s*/).filter(Boolean); }
+function evidenceClauses(text: string) {
+  return text.split(/\s+(?:and|but|while|whereas|although|including)\s+|,\s*(?:and|but|while|whereas|although|including)\s+/i)
+    .map((part) => part.trim()).filter(Boolean);
+}
 
 // Fail closed on provenance, clinical boundaries, attribution and unsupported
 // details. Labels are context for short form answers, never affirmative facts:
@@ -92,6 +96,11 @@ export function validateAssessmentSynthesis(candidate: unknown, facts: Assessmen
     const values = sources.map((fact) => fact.normalizedValue).join(" ");
     const sourceNumbers = new Set<string>(values.match(/\b\d+(?:\.\d+)?\b/g) ?? []);
     for (const sentence of sentences(block.text)) {
+      // A supported opening clause must not lend its citation to a separate,
+      // unsupported assertion later in the same sentence.
+      for (const clause of evidenceClauses(sentence)) {
+        if (tokens(clause).size > 0 && !sources.some((fact) => related(clause, fact) > 0)) semanticIssue("unsupported_statement");
+      }
       const relevant = sources.filter((fact) => related(sentence, fact) > 0);
       if (!relevant.length) semanticIssue("unsupported_statement");
       const relevantValues = relevant.map((fact) => fact.normalizedValue).join(" ");

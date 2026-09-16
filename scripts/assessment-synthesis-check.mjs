@@ -59,6 +59,9 @@ test("short denied form answer uses its field context without becoming positive"
 test("nonexistent evidence is blocked", () => rejects(altered("Lives alone.", ["fact-999"]), "missing_source"));
 test("uncited paragraph is blocked", () => rejects(altered("Lives alone.", []), "invalid_synthesis_shape"));
 test("a multi-sentence block is rejected before it can hide an unsupported statement", () => rejects(altered("Lives alone in an apartment. Enjoys competitive swimming."), "invalid_synthesis_shape"));
+test("an unsupported detail cannot hide inside a supported sentence", () => rejects(altered("The participant lives alone in an apartment and enjoys competitive swimming."), "unsupported_statement"));
+test("two supported clauses can cite their respective source facts", () => assert.equal(synth.validateAssessmentSynthesis(altered("The participant lives alone in an apartment and enjoys music activities.", ["fact-001", "fact-002"]), facts).valid, true));
+test("an unsupported plan detail cannot hide after a supported intervention", () => rejects(altered("Consider structured music activities to support socialization and add horseback riding.", ["fact-002", "fact-003"], "plan"), "unsupported_statement"));
 test("unrelated citations cannot establish a diagnosis", () => rejects(altered("The participant is diagnosed with bipolar disorder.", ["fact-007"]), "unsupported_clinical_concept"));
 test("unsupported relationship is blocked", () => rejects(altered("The participant lives with a daughter in an apartment."), "unsupported_relationship"));
 test("unsupported numeric detail is blocked", () => rejects(altered("The participant lives in an apartment with 3 rooms."), "unsupported_numeric"));
@@ -150,6 +153,15 @@ generated = draft;
 const v3request = () => new Request("https://example.test/api/assessment/generate", { method: "POST", headers: { "X-Assessment-Format": "synthesis-v3" }, body: JSON.stringify({ version: 1, jurisdiction: "NJ", facts, reviewedAmbiguousFindings: [] }) });
 result = await route.POST(v3request());
 test("v3 accepts a server-validated single-sentence ledger draft without a model verdict", () => assert.equal(result.status, 200));
+generated = altered("The participant lives alone in an apartment and enjoys competitive swimming.");
+owner = false;
+const unsupportedResults = [];
+for (let index = 0; index < 10; index++) unsupportedResults.push(await route.POST(v3request()));
+test("v3 rejects the same unsupported draft consistently without a customer charge", () => {
+  assert.ok(unsupportedResults.every((entry) => entry.status === 502 && entry.body.code === "validation_failed"));
+  assert.deepEqual([reserve, complete, release], [14, 1, 13]);
+});
+owner = true;
 
 // Exercise the actual two-call provider operation. It may not self-certify a
 // draft, leak PHI to the reviewer, accept missing verdicts, or reset its budget.
