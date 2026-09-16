@@ -238,6 +238,7 @@ async function makeResponsesApiCall(
     const bodyStartedAt = performance.now();
     const rawResponse: unknown = await response.json();
     recordAssessmentProviderTiming({ runId, phase: "body", attempt, phaseMs: Math.round(performance.now() - bodyStartedAt) });
+    recordAssessmentProviderTiming({ runId, phase: "provider_result", attempt, ...safeProviderResultMetrics(rawResponse) });
     const outputText = extractOutputText(rawResponse);
     if (!outputText) throw new AssessmentProviderError("incomplete");
 
@@ -252,10 +253,42 @@ async function makeResponsesApiCall(
     }
     return parsed.claims as AssessmentClaim[];
   } catch (error) {
+    recordAssessmentProviderTiming({
+      runId,
+      phase: "attempt_failure",
+      attempt,
+      failure: error instanceof AssessmentProviderError ? error.failure : signal.aborted ? "aborted" : "unavailable"
+    });
     if (error instanceof AssessmentProviderError) throw error;
     if (signal.aborted) throw new AssessmentProviderError("aborted");
     throw new AssessmentProviderError("unavailable");
   }
+}
+
+function safeProviderResultMetrics(value: unknown) {
+  if (!isRecord(value)) return { responseStatus: "invalid" };
+  const validStatuses = new Set(["completed", "incomplete", "failed", "cancelled", "queued", "in_progress"]);
+  const responseStatus = typeof value.status === "string" && validStatuses.has(value.status)
+    ? value.status
+    : "other";
+  const incompleteDetails = isRecord(value.incomplete_details) ? value.incomplete_details : null;
+  const validReasons = new Set(["max_output_tokens", "content_filter"]);
+  const incompleteReason = typeof incompleteDetails?.reason === "string" && validReasons.has(incompleteDetails.reason)
+    ? incompleteDetails.reason
+    : undefined;
+  const usage = isRecord(value.usage) ? value.usage : null;
+  const outputDetails = usage && isRecord(usage.output_tokens_details) ? usage.output_tokens_details : null;
+  return {
+    responseStatus,
+    incompleteReason,
+    inputTokens: safeTokenCount(usage?.input_tokens),
+    outputTokens: safeTokenCount(usage?.output_tokens),
+    reasoningTokens: safeTokenCount(outputDetails?.reasoning_tokens)
+  };
+}
+
+function safeTokenCount(value: unknown) {
+  return Number.isSafeInteger(value) && (value as number) >= 0 ? value as number : undefined;
 }
 
 function extractOutputText(value: unknown) {
