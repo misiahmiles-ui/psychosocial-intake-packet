@@ -1,10 +1,16 @@
 "use client";
 
-import type { IntakeStep } from "@/types/intake";
+import type { IntakeStep, PsychosocialJurisdiction } from "@/types/intake";
 import { FieldInput } from "./FieldInput";
 import { MentalStatusScreening } from "./MentalStatusScreening";
 
-export function FormSection({ step }: { step: IntakeStep }) {
+export function FormSection({
+  step,
+  jurisdiction
+}: {
+  step: IntakeStep;
+  jurisdiction: PsychosocialJurisdiction;
+}) {
   if (step.custom === "mental-status") {
     return <MentalStatusScreening step={step} />;
   }
@@ -28,7 +34,11 @@ export function FormSection({ step }: { step: IntakeStep }) {
       {step.fields ? (
         <div className="form-grid">
           {step.fields.map((field) => (
-            <FieldInput key={field.path} field={field} />
+            <FieldInput
+              key={field.path}
+              field={field}
+              jurisdiction={jurisdiction}
+            />
           ))}
         </div>
       ) : null}
@@ -46,7 +56,11 @@ export function FormSection({ step }: { step: IntakeStep }) {
           ) : null}
           <div className="form-grid mt-5">
             {group.fields.map((field) => (
-              <FieldInput key={field.path} field={field} />
+              <FieldInput
+                key={field.path}
+                field={field}
+                jurisdiction={jurisdiction}
+              />
             ))}
           </div>
         </div>

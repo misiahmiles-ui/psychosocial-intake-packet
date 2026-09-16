@@ -95,6 +95,10 @@ textarea.field-input {
   display: none;
 }
 
+.field-guidance {
+  min-width: 0;
+}
+
 @media (max-width: 800px) {
   .form-grid {
     grid-template-columns: 1fr;
@@ -115,6 +119,10 @@ textarea.field-input {
   }
 
   .screen-only {
+    display: none !important;
+  }
+
+  .field-guidance {
     display: none !important;
   }
 

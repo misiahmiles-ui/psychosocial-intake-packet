@@ -25,6 +25,8 @@ type OrganizationRow = {
 type SubscriptionRow = {
   plan_code: SubscriptionPlan;
   status: string;
+  stripe_checkout_session_id: string | null;
+  upfront_paid_at: string | null;
 };
 
 type EntitlementRow = {
@@ -79,7 +81,7 @@ export async function getSharedSuiteAccess(
         .maybeSingle(),
       admin
         .from("organization_subscriptions")
-        .select("plan_code,status")
+        .select("plan_code,status,stripe_checkout_session_id,upfront_paid_at")
         .eq("organization_id", membership.organization_id)
         .maybeSingle(),
       admin
@@ -125,6 +127,13 @@ export async function getSharedSuiteAccess(
     intakeJurisdiction: organization?.intake_jurisdiction ?? "NJ",
     organizationName: organization?.facility_name ?? null,
     organizationRole: membership.role,
+    purchaseActivation:
+      subscription?.stripe_checkout_session_id && subscription.upfront_paid_at
+        ? {
+            purchaseReference: `stripe-checkout:${subscription.stripe_checkout_session_id}`,
+            startsAt: subscription.upfront_paid_at
+          }
+        : null,
     seatLimits,
     subscriptionPlan: subscription?.plan_code ?? null,
     workflowAccess: resolveWorkflowAccess({
@@ -147,6 +156,7 @@ function emptySharedAccess() {
     intakeJurisdiction: "NJ" as const,
     organizationName: null,
     organizationRole: null,
+    purchaseActivation: null,
     seatLimits: { nursing: 0, psychosocial: 0 } satisfies WorkflowSeatLimits,
     subscriptionPlan: null,
     workflowAccess: { nursing: false, psychosocial: false }

@@ -3,7 +3,12 @@
 import { useMemo } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import type { IntakePacket, IntakeStep } from "@/types/intake";
+import {
+  MENTAL_STATUS_ACKNOWLEDGMENT_GUIDANCE,
+  MENTAL_STATUS_GUIDANCE
+} from "@/lib/fieldGuidance";
 import { scoreMentalStatus } from "@/lib/packetUtils";
+import { FieldGuidance } from "./FieldGuidance";
 
 const responseOptions = [
   { label: "Correct", value: "correct" },
@@ -95,23 +100,27 @@ export function MentalStatusScreening({ step }: { step: IntakeStep }) {
                 {...register(`mentalStatus.responses.${index}.notes` as never)}
               />
             </label>
+            <FieldGuidance guidance={MENTAL_STATUS_GUIDANCE} />
           </fieldset>
         ))}
       </div>
 
-      <label className="mt-5 flex items-start gap-3 rounded-lg border border-[#d7dfdc] bg-white p-4 font-semibold text-[#334642]">
-        <input
-          type="checkbox"
-          className="mt-1 h-5 w-5 rounded border-[#9fb0ab] accent-sea"
-          {...register("mentalStatus.screeningNote" as never)}
-        />
-        <span>
-          I understand this automated result is a screening summary only. It
-          does not diagnose cognitive impairment, determine decision-making
-          capacity, establish New Jersey program eligibility, or replace
-          qualified professional assessment and follow-up.
-        </span>
-      </label>
+      <div className="mt-5">
+        <label className="flex items-start gap-3 rounded-lg border border-[#d7dfdc] bg-white p-4 font-semibold text-[#334642]">
+          <input
+            type="checkbox"
+            className="mt-1 h-5 w-5 rounded border-[#9fb0ab] accent-sea"
+            {...register("mentalStatus.screeningNote" as never)}
+          />
+          <span>
+            I understand this automated result is a screening summary only. It
+            does not diagnose cognitive impairment, determine decision-making
+            capacity, establish New Jersey program eligibility, or replace
+            qualified professional assessment and follow-up.
+          </span>
+        </label>
+        <FieldGuidance guidance={MENTAL_STATUS_ACKNOWLEDGMENT_GUIDANCE} />
+      </div>
     </section>
   );
 }

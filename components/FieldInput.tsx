@@ -3,9 +3,21 @@
 import { useId, type ChangeEvent } from "react";
 import { ImagePlus, X } from "lucide-react";
 import { useFormContext, useWatch } from "react-hook-form";
-import type { FieldDefinition, IntakePacket } from "@/types/intake";
+import { getFieldGuidance } from "@/lib/fieldGuidance";
+import type {
+  FieldDefinition,
+  IntakePacket,
+  PsychosocialJurisdiction
+} from "@/types/intake";
+import { FieldGuidance } from "./FieldGuidance";
 
-export function FieldInput({ field }: { field: FieldDefinition }) {
+export function FieldInput({
+  field,
+  jurisdiction
+}: {
+  field: FieldDefinition;
+  jurisdiction: PsychosocialJurisdiction;
+}) {
   const inputId = useId();
   const { control, register, setValue } = useFormContext<IntakePacket>();
   const kind = field.kind ?? "text";
@@ -15,6 +27,7 @@ export function FieldInput({ field }: { field: FieldDefinition }) {
     control,
     name: field.path as never
   }) as unknown;
+  const guidance = getFieldGuidance(field.path, jurisdiction);
 
   if (kind === "logoUpload") {
     const logoValue = typeof watchedValue === "string" ? watchedValue : "";
@@ -92,22 +105,24 @@ export function FieldInput({ field }: { field: FieldDefinition }) {
             {field.helpText}
           </span>
         ) : null}
+        <FieldGuidance guidance={guidance} />
       </div>
     );
   }
 
   if (kind === "checkbox") {
     return (
-      <label
-        className={`flex min-h-12 items-center gap-3 rounded-lg border border-[#d7dfdc] bg-white px-4 py-3 font-semibold text-[#334642] ${className}`}
-      >
-        <input
-          type="checkbox"
-          className="h-5 w-5 rounded border-[#9fb0ab] accent-sea"
-          {...registration}
-        />
-        <span>{field.label}</span>
-      </label>
+      <div className={className}>
+        <label className="flex min-h-12 items-center gap-3 rounded-lg border border-[#d7dfdc] bg-white px-4 py-3 font-semibold text-[#334642]">
+          <input
+            type="checkbox"
+            className="h-5 w-5 rounded border-[#9fb0ab] accent-sea"
+            {...registration}
+          />
+          <span>{field.label}</span>
+        </label>
+        <FieldGuidance guidance={guidance} />
+      </div>
     );
   }
 
@@ -134,6 +149,7 @@ export function FieldInput({ field }: { field: FieldDefinition }) {
         {field.helpText ? (
           <p className="mt-2 text-sm text-[#667873]">{field.helpText}</p>
         ) : null}
+        <FieldGuidance guidance={guidance} />
       </fieldset>
     );
   }
@@ -162,16 +178,20 @@ export function FieldInput({ field }: { field: FieldDefinition }) {
             </label>
           ))}
         </div>
+        <FieldGuidance guidance={guidance} />
       </fieldset>
     );
   }
 
   if (kind === "select") {
     return (
-      <label className={className} htmlFor={inputId}>
-        <span className={`field-label ${field.required ? "required-dot" : ""}`}>
+      <div className={className}>
+        <label
+          className={`field-label ${field.required ? "required-dot" : ""}`}
+          htmlFor={inputId}
+        >
           {field.label}
-        </span>
+        </label>
         <select id={inputId} className="field-input" {...registration}>
           <option value="">Select an option</option>
           {field.options?.map((option) => (
@@ -181,19 +201,23 @@ export function FieldInput({ field }: { field: FieldDefinition }) {
           ))}
         </select>
         {field.helpText ? (
-          <span className="mt-2 block text-sm text-[#667873]">
+          <p className="mt-2 text-sm text-[#667873]">
             {field.helpText}
-          </span>
+          </p>
         ) : null}
-      </label>
+        <FieldGuidance guidance={guidance} />
+      </div>
     );
   }
 
   return (
-    <label className={className} htmlFor={inputId}>
-      <span className={`field-label ${field.required ? "required-dot" : ""}`}>
+    <div className={className}>
+      <label
+        className={`field-label ${field.required ? "required-dot" : ""}`}
+        htmlFor={inputId}
+      >
         {field.label}
-      </span>
+      </label>
       {kind === "textarea" ? (
         <textarea
           id={inputId}
@@ -211,10 +235,9 @@ export function FieldInput({ field }: { field: FieldDefinition }) {
         />
       )}
       {field.helpText ? (
-        <span className="mt-2 block text-sm text-[#667873]">
-          {field.helpText}
-        </span>
+        <p className="mt-2 text-sm text-[#667873]">{field.helpText}</p>
       ) : null}
-    </label>
+      <FieldGuidance guidance={guidance} />
+    </div>
   );
 }

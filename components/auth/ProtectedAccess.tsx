@@ -5,6 +5,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertCircle, CreditCard, LockKeyhole, ShieldCheck } from "lucide-react";
 import {
+  INITIAL_ASSESSMENT_ENTITLEMENT_DETAIL,
+  INITIAL_ASSESSMENT_ENTITLEMENT_LABEL,
+  RECURRING_ASSESSMENT_ENTITLEMENT_LABEL
+} from "@/lib/assessmentEntitlementPolicy";
+import {
   createSupabaseBrowserClient,
   hasSupabaseBrowserConfig
 } from "@/lib/supabase/browser";
@@ -296,6 +301,12 @@ export function ProtectedAccess({ children }: ProtectedAccessProps) {
                   This account is created, but payment has not been confirmed.
                   Complete the upfront access payment and monthly hosted access
                   subscription to unlock the hosted workflow dashboard.
+                </p>
+                <p className="mt-2 text-sm font-bold leading-6 text-[#643524]">
+                  {INITIAL_ASSESSMENT_ENTITLEMENT_LABEL}. {INITIAL_ASSESSMENT_ENTITLEMENT_DETAIL}
+                </p>
+                <p className="mt-2 text-sm font-bold leading-6 text-[#643524]">
+                  After that included period, {RECURRING_ASSESSMENT_ENTITLEMENT_LABEL}, non-rollover.
                 </p>
                 <fieldset className="mt-4">
                   <legend className="text-sm font-bold text-ink">

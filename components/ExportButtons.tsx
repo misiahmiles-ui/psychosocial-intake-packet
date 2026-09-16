@@ -8,16 +8,21 @@ import {
   Trash2
 } from "lucide-react";
 import type { IntakePacket } from "@/types/intake";
+import type { AcceptedAssessment } from "@/types/assessment";
 import { buildPacketPdf, downloadBytes } from "@/lib/pdfExport";
 import { EXPORT_PRIVACY_NOTICE, UNSAVED_WARNING } from "@/lib/placeholders";
 import { resolvePsychosocialJurisdiction } from "@/lib/psychosocialEditions";
 
 type ExportButtonsProps = {
+  acceptedAssessment?: AcceptedAssessment | null;
+  currentRevisionToken?: string;
   getPacket: () => IntakePacket;
   onClear: () => void;
 };
 
 export function ExportButtons({
+  acceptedAssessment = null,
+  currentRevisionToken,
   getPacket,
   onClear
 }: ExportButtonsProps) {
@@ -43,11 +48,15 @@ export function ExportButtons({
 
   async function exportFinalPdf() {
     const packet = getPacket();
+    const currentAssessment =
+      acceptedAssessment?.localRevisionToken === currentRevisionToken
+        ? acceptedAssessment
+        : null;
 
     setMessages([]);
     setBusy("final");
     try {
-      const bytes = await buildPacketPdf(packet, "final");
+      const bytes = await buildPacketPdf(packet, "final", currentAssessment);
       const edition = resolvePsychosocialJurisdiction(packet).toLowerCase();
       downloadBytes(bytes, `adult-day-intake-${edition}-final-packet.pdf`);
     } catch {
@@ -110,6 +119,12 @@ export function ExportButtons({
       <p className="mt-4 rounded-lg border border-[#cde7df] bg-mint p-4 text-sm font-semibold leading-6 text-[#334642]">
         {EXPORT_PRIVACY_NOTICE}
       </p>
+
+      {acceptedAssessment && acceptedAssessment.localRevisionToken !== currentRevisionToken ? (
+        <p className="mt-3 rounded-lg border border-[#e7c5b9] bg-[#fff8f5] p-3 text-sm font-semibold leading-6 text-[#643524]">
+          The stale accepted assessment will be omitted from final PDF and print output. Regenerate and accept it again to include a current assessment.
+        </p>
+      ) : null}
 
       <p className="mt-3 rounded-lg border border-[#f0d3c8] bg-[#fff8f5] p-3 text-sm leading-6 text-[#643524]">
         Draft PDF note: Most typed responses remain editable in the downloaded

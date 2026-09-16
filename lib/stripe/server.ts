@@ -8,7 +8,8 @@ export function hasStripeCheckoutConfig() {
   return Boolean(
     process.env.STRIPE_SECRET_KEY &&
       process.env.STRIPE_STANDARD_ACCESS_UPFRONT_PRICE_ID &&
-      process.env.STRIPE_STANDARD_ACCESS_MONTHLY_PRICE_ID
+      process.env.STRIPE_STANDARD_ACCESS_MONTHLY_PRICE_ID &&
+      process.env.STRIPE_PSYCHOSOCIAL_ASSESSMENT_GENERATIONS_MONTHLY_PRICE_ID
   );
 }
 
@@ -17,7 +18,8 @@ export function hasStripeWebhookConfig() {
     process.env.STRIPE_SECRET_KEY &&
       process.env.STRIPE_WEBHOOK_SECRET &&
       process.env.STRIPE_STANDARD_ACCESS_UPFRONT_PRICE_ID &&
-      process.env.STRIPE_STANDARD_ACCESS_MONTHLY_PRICE_ID
+      process.env.STRIPE_STANDARD_ACCESS_MONTHLY_PRICE_ID &&
+      process.env.STRIPE_PSYCHOSOCIAL_ASSESSMENT_GENERATIONS_MONTHLY_PRICE_ID
   );
 }
 
@@ -32,6 +34,17 @@ export function getStandardAccessPriceIds() {
   return { monthlyPriceId, upfrontPriceId };
 }
 
+export function getAssessmentGenerationMonthlyPriceId() {
+  const priceId =
+    process.env.STRIPE_PSYCHOSOCIAL_ASSESSMENT_GENERATIONS_MONTHLY_PRICE_ID;
+
+  if (!priceId) {
+    throw new Error("Assessment-generation Stripe Price ID is not configured.");
+  }
+
+  return priceId;
+}
+
 export function createStripeClient() {
   const secretKey = process.env.STRIPE_SECRET_KEY;
 
@@ -40,6 +53,66 @@ export function createStripeClient() {
   }
 
   return new Stripe(secretKey);
+}
+
+export async function ensureAssessmentGenerationSubscription(
+  stripe: Stripe,
+  {
+    customerId,
+    initialWindowExpiresAt,
+    organizationId,
+    parentCheckoutSessionId,
+    userId
+  }: {
+    customerId: string;
+    initialWindowExpiresAt: string;
+    organizationId?: string;
+    parentCheckoutSessionId: string;
+    userId: string;
+  }
+) {
+  const priceId = getAssessmentGenerationMonthlyPriceId();
+  const existing = await stripe.subscriptions.list({
+    customer: customerId,
+    limit: 100,
+    status: "all"
+  });
+  const matchingSubscription = existing.data.find(
+    (subscription) =>
+      subscription.metadata.parent_checkout_session_id ===
+        parentCheckoutSessionId &&
+      subscription.metadata.product_code ===
+        "psychosocial_assessment_generations"
+  );
+
+  if (matchingSubscription) return matchingSubscription;
+
+  const configuredTrialEnd = Math.floor(
+    new Date(initialWindowExpiresAt).getTime() / 1000
+  );
+  const trialEnd = Math.max(
+    configuredTrialEnd,
+    Math.floor(Date.now() / 1000) + 60
+  );
+
+  return stripe.subscriptions.create(
+    {
+      collection_method: "charge_automatically",
+      customer: customerId,
+      items: [{ price: priceId, quantity: 1 }],
+      metadata: {
+        ...(organizationId ? { organization_id: organizationId } : {}),
+        generation_scope: organizationId ? "organization" : "user",
+        parent_checkout_session_id: parentCheckoutSessionId,
+        product_code: "psychosocial_assessment_generations",
+        supabase_user_id: userId
+      },
+      trial_end: trialEnd
+    },
+    {
+      idempotencyKey: `psychosocial-assessment-generations:${parentCheckoutSessionId}`
+    }
+  );
 }
 
 export function getSiteUrl() {

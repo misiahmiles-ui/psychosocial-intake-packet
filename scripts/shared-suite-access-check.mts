@@ -11,6 +11,7 @@ import {
   buildPsychosocialPurchaseRecords
 } from "../lib/access/sharedAccountProvisioning.ts";
 import {
+  assertAssessmentGenerationSubscriptionAuthority,
   assertPsychosocialCheckoutAuthority,
   assertPsychosocialSubscriptionAuthority
 } from "../lib/stripe/psychosocialCheckoutAuthority.ts";
@@ -57,6 +58,20 @@ const tests = [
         metadata: approvedMetadata("buyer-1"),
         userId: "buyer-1"
       });
+
+      assertAssessmentGenerationSubscriptionAuthority({
+        customerId: "cus_approved",
+        expectedMonthlyPriceId: "price_assessment_generations",
+        items: [{ priceId: "price_assessment_generations", quantity: 1 }],
+        metadata: {
+          generation_scope: "organization",
+          organization_id: "organization-1",
+          parent_checkout_session_id: "cs_test_approved",
+          product_code: "psychosocial_assessment_generations",
+          supabase_user_id: "buyer-1"
+        },
+        userId: "buyer-1"
+      });
     }
   },
   {
@@ -64,6 +79,20 @@ const tests = [
     run() {
       assert.throws(() =>
         assertCustomerSeatEligible({ profileRole: "owner" })
+      );
+      assert.throws(() =>
+        assertAssessmentGenerationSubscriptionAuthority({
+          customerId: "cus_approved",
+          expectedMonthlyPriceId: "price_assessment_generations",
+          items: [{ priceId: "price_wrong", quantity: 1 }],
+          metadata: {
+            generation_scope: "organization",
+            parent_checkout_session_id: "cs_test_approved",
+            product_code: "psychosocial_assessment_generations",
+            supabase_user_id: "buyer-1"
+          },
+          userId: "buyer-1"
+        })
       );
       assert.throws(() =>
         assertCustomerSeatEligible({

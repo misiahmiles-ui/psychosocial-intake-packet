@@ -1,0 +1,14 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "incremental": false,
+    "isolatedModules": false,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "noEmit": false,
+    "outDir": "../tmp/pdf-verification-build",
+    "rootDir": "..",
+    "target": "ES2022"
+  },
+  "include": ["./pdf-verification-fixture.ts"]
+}

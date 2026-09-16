@@ -15,19 +15,69 @@ Created by Marvin Miles, LSW.
 - Print action.
 - Final PDF export.
 - Mental status screening with automatic score and impairment level.
+- Optional PHI-reviewed, source-grounded psychosocial assessment generation.
 - Fictitious completed example at `/example`.
 - Company placeholders for headers, consent language, and exports.
 - Paid buyer access layer using Supabase Auth, Supabase profiles, and Stripe Checkout.
 
 ## Privacy note
 
-This app is local PDF export only. It does not save assessment information inside the web app, browser storage, backend, database, Netlify, cloud storage, cookies, analytics, logs, or service worker cache. Entered information remains active only in the current browser tab until the user downloads an Editable Draft PDF, exports a final PDF, prints, clears the form, refreshes, closes the tab, or navigates away.
+The intake and PDF workflow does not persist assessment information inside the app, browser storage, Supabase, Netlify forms, analytics, logs, or a clinical-record database. Entered information remains active only in the current browser tab until the user downloads an Editable Draft PDF, exports a final PDF, prints, clears the form, refreshes, closes the tab, or navigates away.
+
+The optional assessment generator is the one exception to a fully local workflow: after a clinician completes the PHI Review Gate, the app sends only the temporary, de-identified, structured fact set to its server-side generation endpoint and then to the configured OpenAI project. The full intake packet, participant identity fields, generated narrative, clinician edits, and final PDF are not stored in the entitlement ledger. The generated assessment returns to volatile browser state for clinician review and local final-PDF export.
 
 Supabase is used only for buyer account login and paid access status. Stripe is used only for payment checkout. Do not add client/member/participant assessment fields, uploaded logos, completed packets, draft packets, or PHI to Supabase, Stripe metadata, Netlify forms, analytics, logs, or any backend.
 
 Use Download Editable Draft PDF if work needs to continue later. The unfinished intake is saved only inside the downloaded PDF file controlled by the clinician or agency. Save downloaded PDFs only to an approved company hard drive, secure shared drive, or encrypted flash drive according to agency policy.
 
 This is a privacy-conscious/no-retention workflow design, not a HIPAA compliance certification. HIPAA-compliant deployment would require separate hosting, security, business associate agreement, compliance, and agency policy review.
+
+## Psychosocial assessment generation
+
+The assessment generator follows the existing LeanMaster Integrated Note Engine integration pattern without importing LeanMaster code or depending on its repository at runtime:
+
+- OpenAI access is server-side only through the Responses API.
+- `OPENAI_API_KEY` and `OPENAI_MODEL` are read only from this application's server environment.
+- Strict JSON Schema structured output is validated again against the transmitted source facts before any result is accepted.
+- Requests use an abortable timeout, one bounded retry, sanitized errors, `store: false`, and no request/response-body logging.
+- OpenAI instructions and the untrusted structured fact payload are kept separate.
+- A final exact-payload PHI scan runs immediately before the outbound request, followed by source-grounding and output-PHI validation after generation.
+
+`store: false` is an API request setting, not a legal, HIPAA, Business Associate Agreement, or zero-retention guarantee. The product owner and each agency must independently review the configured OpenAI account/project, data controls, contracts, hosting, and policies before production use.
+
+### Generation entitlement
+
+A qualifying Psychosocial Intake purchase/activation grants **30 AI-Assisted Psychosocial Assessment Generations Included**. This one-time pool begins at the recorded activation timestamp, ends exactly 30 days later, and does not roll over. After that included period, the application creates a separate **AI-Assisted Psychosocial Assessment Generations** Stripe subscription at **$10/month**. Each successfully paid Stripe billing cycle grants a new non-rollover pool of 30 successful generations for that actual billing-cycle window. It is never a calendar-month reset. For shared-suite accounts, authorized Psychosocial users at the facility consume the same facility purchase/billing-cycle pool; a legacy single-user activation uses that individual account's pool.
+
+The default quantity and window live centrally in `lib/assessmentEntitlementPolicy.ts` and `lib/assessmentUsage.ts`. Server enforcement can be configured with `PSYCHOSOCIAL_ASSESSMENT_INCLUDED_QUANTITY` (default `30`), `PSYCHOSOCIAL_ASSESSMENT_ENTITLEMENT_WINDOW_DAYS` (default `30`), and `PSYCHOSOCIAL_ASSESSMENT_RECURRING_INCLUDED_QUANTITY` (default `30`). The recurring Stripe Price ID is server-only in `STRIPE_PSYCHOSOCIAL_ASSESSMENT_GENERATIONS_MONTHLY_PRICE_ID`. No additional 30/40/50-generation packs are implemented.
+
+Only a completed result that passes response-schema, output-PHI, provenance/source-grounding, and protected clinical/safety validation consumes one credit. PHI Review Gate activity, blocked PHI transmission, unresolved safety conflicts, provider/API failures, timeouts, aborted requests, schema failures, output-PHI failures, provenance failures, protected clinical/safety validation failures, and every other failed attempt release the reservation and consume zero credits. A successful clinician-requested regeneration generates another validated assessment and consumes one additional credit. Failed attempts remain briefly as account-level, nonclinical rate-limit events so repeated failures cannot bypass abuse controls; they never count as successful entitlement usage.
+
+### Owner setup for Netlify and Supabase
+
+Do not deploy this feature until the owner has reviewed the branch and completed these steps:
+
+1. Open the existing Supabase project used by this Psychosocial Intake application.
+2. Confirm the shared-suite schema migration is present, then in **SQL Editor** create a new query, paste `supabase/migrations/20260915_psychosocial_assessment_quota.sql`, and run it once.
+3. In **Table Editor**, verify `psychosocial_assessment_generation_entitlements` contains only purchase, Stripe subscription/invoice, account-scope, included quantity, and billing-window metadata; `psychosocial_assessment_generation_events` contains only reservation/completion metadata. Confirm row-level security is enabled on both. Neither table may contain participant clinical content or PHI.
+4. In the Netlify site for this application, open **Site configuration → Environment variables**.
+5. Add `OPENAI_API_KEY` as a server-only value. It may be a key from the same approved OpenAI account/project/billing source used by LeanMaster, but it must be configured independently for this Netlify site. Never use a `NEXT_PUBLIC_` prefix.
+6. Add or confirm `OPENAI_MODEL`, `PSYCHOSOCIAL_ASSESSMENT_INCLUDED_QUANTITY=30`, `PSYCHOSOCIAL_ASSESSMENT_ENTITLEMENT_WINDOW_DAYS=30`, `PSYCHOSOCIAL_ASSESSMENT_RECURRING_INCLUDED_QUANTITY=30`, `PSYCHOSOCIAL_ASSESSMENT_RAPID_LIMIT=5`, `PSYCHOSOCIAL_ASSESSMENT_RAPID_WINDOW_SECONDS=60`, `PSYCHOSOCIAL_ASSESSMENT_RESERVATION_TTL_SECONDS=600`, `PSYCHOSOCIAL_ASSESSMENT_TIMEOUT_MS=75000`, and the server-only `STRIPE_PSYCHOSOCIAL_ASSESSMENT_GENERATIONS_MONTHLY_PRICE_ID`.
+7. Scope the variables to the intended Netlify contexts, save them, and redeploy only after review. Do not copy LeanMaster's `.env` file or source code into this repository.
+
+The API key never belongs in source code, browser code, a public environment variable, Supabase tables, Stripe metadata, or logs. Applying the migration and adding environment variables are manual owner actions; this branch does not change the live database or deploy the site.
+
+Run these checks before approving deployment:
+
+```bash
+pnpm run test:assessment-safeguards
+pnpm run test:assessment-architecture
+pnpm run typecheck
+pnpm build
+pnpm run verify:assessment-pdf
+```
+
+A live provider smoke test must be performed only after the separate server environment and entitlement migration are present. Use fictitious data; verify a successful validated result increments completed usage once, a successful regeneration increments it once more, a forced failure does not increment usage, the included pool ends after 30 exact days, and a paid assessment-generation Stripe invoice creates exactly one new 30-generation billing-cycle pool.
 
 ## Editable draft PDF behavior
 
@@ -99,7 +149,7 @@ This project is set up for the simple paid-access model:
 
 1. Netlify hosts the web app.
 2. Supabase stores buyer accounts and access status only.
-3. Stripe collects the $487 upfront payment and starts the $19/month hosted access and maintenance subscription.
+3. Stripe collects the $487 upfront payment and starts the $19/month hosted access and maintenance subscription. The webhook also creates the separate $10/month assessment-generation subscription with a 30-day trial that matches the included generation period.
 4. Stripe sends webhooks back to the app.
 5. The webhook marks the buyer profile as `has_access = true` while the subscription is active.
 6. Subscription update/cancellation webhooks update access when Stripe reports the subscription is no longer active.
@@ -193,6 +243,7 @@ STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
 STRIPE_STANDARD_ACCESS_UPFRONT_PRICE_ID=
 STRIPE_STANDARD_ACCESS_MONTHLY_PRICE_ID=
+STRIPE_PSYCHOSOCIAL_ASSESSMENT_GENERATIONS_MONTHLY_PRICE_ID=
 STANDARD_ACCESS_UPFRONT_PRICE_CENTS=48700
 STANDARD_ACCESS_MONTHLY_PRICE_CENTS=1900
 ```
@@ -205,7 +256,7 @@ In Stripe, create a webhook endpoint pointing to:
 https://your-netlify-site.netlify.app/api/stripe/webhook
 ```
 
-Send the `checkout.session.completed`, `customer.subscription.updated`, and `customer.subscription.deleted` events to that endpoint. Copy the webhook signing secret into `STRIPE_WEBHOOK_SECRET`.
+Send the `checkout.session.completed`, `invoice.paid`, `customer.subscription.updated`, and `customer.subscription.deleted` events to that endpoint. Copy the webhook signing secret into `STRIPE_WEBHOOK_SECRET`.
 
 Do not hard-code secret keys, Stripe secret keys, Supabase service role keys, backend payment logic, or payment credentials in browser code. Use Netlify environment variables.
 
