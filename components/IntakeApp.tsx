@@ -5,6 +5,7 @@ import { type MouseEvent, useEffect, useMemo, useState } from "react";
 import { FormProvider, useForm, useWatch } from "react-hook-form";
 import { ArrowLeft, ArrowRight, Home, ShieldCheck } from "lucide-react";
 import { defaultValues } from "@/lib/defaultValues";
+import { assessmentInputRevision } from "@/lib/assessment";
 import {
   getIntakeSteps,
   JURISDICTION_LABELS,
@@ -22,6 +23,8 @@ import type {
   IntakeStep,
   PsychosocialJurisdiction
 } from "@/types/intake";
+import type { AcceptedAssessment } from "@/types/assessment";
+import { AssessmentWorkflow } from "./AssessmentWorkflow";
 import { ExportButtons } from "./ExportButtons";
 import { FormSection } from "./FormSection";
 import { IntakeStepper } from "./IntakeStepper";
@@ -54,6 +57,8 @@ export function IntakeApp({
   );
   const initialIndex = Math.min(Math.max(initialStepIndex, 0), intakeSteps.length);
   const [activeIndex, setActiveIndex] = useState(initialIndex);
+  const [acceptedAssessment, setAcceptedAssessment] =
+    useState<AcceptedAssessment | null>(null);
   const formDefaults = useMemo(
     () => ({
       ...clonePacket(initialPacket ?? defaultValues),
@@ -66,6 +71,11 @@ export function IntakeApp({
     mode: "onBlur"
   });
   const watchedPacket = useWatch({ control: methods.control }) as IntakePacket;
+  const currentPacket = watchedPacket ?? methods.getValues();
+  const currentAssessmentRevision = useMemo(
+    () => assessmentInputRevision(currentPacket, activeJurisdiction),
+    [activeJurisdiction, currentPacket]
+  );
 
   const completedStepIds = useMemo(() => {
     const packet = watchedPacket ?? methods.getValues();
@@ -108,6 +118,7 @@ export function IntakeApp({
 
   function clear() {
     methods.reset({ ...clonePacket(defaultValues), jurisdiction: activeJurisdiction });
+    setAcceptedAssessment(null);
     setActiveIndex(0);
   }
 
@@ -235,10 +246,34 @@ export function IntakeApp({
           </aside>
 
           <div className="grid gap-5">
-            <ExportButtons getPacket={methods.getValues} onClear={clear} />
+            {!isReview ? (
+              <ExportButtons getPacket={methods.getValues} onClear={clear} />
+            ) : null}
 
             {isReview ? (
-              <ReviewPacket packet={methods.getValues()} />
+              <>
+                <ReviewPacket
+                  acceptedAssessment={acceptedAssessment}
+                  currentRevisionToken={currentAssessmentRevision}
+                  packet={methods.getValues()}
+                />
+                <AssessmentWorkflow
+                  acceptedAssessment={acceptedAssessment}
+                  currentRevisionToken={currentAssessmentRevision}
+                  jurisdiction={activeJurisdiction}
+                  onAccept={setAcceptedAssessment}
+                  onReturnToIntake={() =>
+                    setActiveIndex(Math.max(0, intakeSteps.length - 1))
+                  }
+                  packet={methods.getValues()}
+                />
+                <ExportButtons
+                  acceptedAssessment={acceptedAssessment}
+                  currentRevisionToken={currentAssessmentRevision}
+                  getPacket={methods.getValues}
+                  onClear={clear}
+                />
+              </>
             ) : (
               <FormSection
                 step={activeStep}
@@ -270,7 +305,11 @@ export function IntakeApp({
         </div>
 
         <div className="print-packet">
-          <ReviewPacket packet={methods.getValues()} />
+          <ReviewPacket
+            acceptedAssessment={acceptedAssessment}
+            currentRevisionToken={currentAssessmentRevision}
+            packet={methods.getValues()}
+          />
         </div>
       </main>
     </FormProvider>

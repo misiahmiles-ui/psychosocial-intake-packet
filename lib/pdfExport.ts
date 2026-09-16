@@ -8,6 +8,7 @@ import {
   StandardFonts
 } from "pdf-lib";
 import type { FieldDefinition, IntakePacket, IntakeStep } from "@/types/intake";
+import type { AcceptedAssessment } from "@/types/assessment";
 import {
   getIntakeSteps,
   JURISDICTION_LABELS,
@@ -50,7 +51,8 @@ const mentalStatusOptions = [
 
 export async function buildPacketPdf(
   packet: IntakePacket,
-  mode: PdfMode
+  mode: PdfMode,
+  acceptedAssessment: AcceptedAssessment | null = null
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -101,6 +103,9 @@ export async function buildPacketPdf(
     );
   }
   getIntakeSteps(jurisdiction).forEach((step) => drawStep(context, step));
+  if (mode === "final" && acceptedAssessment) {
+    drawAcceptedAssessment(context, acceptedAssessment);
+  }
   drawPageNumbers(context);
   if (mode === "draft" && context.form) {
     drawDraftWatermark(context);
@@ -108,6 +113,41 @@ export async function buildPacketPdf(
   }
 
   return pdfDoc.save();
+}
+
+function drawAcceptedAssessment(
+  context: PdfContext,
+  assessment: AcceptedAssessment
+) {
+  context.page = context.pdfDoc.addPage(pageSize);
+  context.y = pageSize[1] - margin;
+  drawPacketHeader(context);
+  drawText(context, "Psychosocial Assessment", 20, true, 10);
+  drawText(
+    context,
+    assessment.clinicianEdited
+      ? "Clinician-reviewed assessment with clinician-authored edits"
+      : "Clinician-reviewed generated assessment",
+    10,
+    true,
+    16
+  );
+
+  assessment.assessmentText
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .forEach((block) => {
+      const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
+      if (lines.length > 1 && !lines[0].startsWith("- ")) {
+        drawText(context, lines[0], 12, true, 8);
+        lines.slice(1).forEach((line) =>
+          drawText(context, line.startsWith("- ") ? `• ${line.slice(2)}` : line, 10, false, 6)
+        );
+      } else {
+        drawText(context, block.replace(/^\- /gm, "• "), 10, false, 12);
+      }
+    });
 }
 
 export function downloadBytes(bytes: Uint8Array, filename: string) {

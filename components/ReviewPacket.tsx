@@ -7,11 +7,16 @@ import {
   resolvePsychosocialJurisdiction
 } from "@/lib/psychosocialEditions";
 import { formatValue, getValueByPath, scoreMentalStatus } from "@/lib/packetUtils";
+import type { AcceptedAssessment } from "@/types/assessment";
 
 export function ReviewPacket({
+  acceptedAssessment = null,
+  currentRevisionToken,
   packet,
   publicPreview = false
 }: {
+  acceptedAssessment?: AcceptedAssessment | null;
+  currentRevisionToken?: string;
   packet: IntakePacket;
   publicPreview?: boolean;
 }) {
@@ -50,6 +55,30 @@ export function ReviewPacket({
           />
         ))}
       </div>
+      {!publicPreview && acceptedAssessment ? (
+        acceptedAssessment.localRevisionToken === currentRevisionToken ? (
+          <section className="mt-6 rounded-lg border border-[#b9d9d1] bg-mint p-5" aria-labelledby="accepted-assessment-title">
+            <p className="text-sm font-bold uppercase tracking-[0.16em] text-clay">
+              Accepted assessment
+            </p>
+            <h3 id="accepted-assessment-title" className="mt-2 text-xl font-bold text-ink">
+              Psychosocial Assessment
+            </h3>
+            <p className="mt-2 text-sm font-semibold text-[#40524e]">
+              {acceptedAssessment.clinicianEdited
+                ? "Clinician-reviewed assessment with clinician-authored edits"
+                : "Clinician-reviewed generated assessment"}
+            </p>
+            <div className="mt-4 whitespace-pre-wrap leading-7 text-ink">
+              {acceptedAssessment.assessmentText}
+            </div>
+          </section>
+        ) : (
+          <p className="no-print mt-6 rounded-lg border border-[#e7c5b9] bg-[#fff8f5] p-4 text-sm font-semibold leading-6 text-[#643524]">
+            The previously accepted assessment is stale and is excluded from print and final PDF output until regenerated and accepted from the current intake.
+          </p>
+        )
+      ) : null}
       {publicPreview ? (
         <p className="mt-5 rounded-lg border border-[#cde7df] bg-mint p-4 text-sm font-semibold leading-6 text-[#334642]">
           Public preview limited to 2 of {intakeSteps.length} sections. Sample
