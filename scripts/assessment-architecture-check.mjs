@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 const read = (path) => readFileSync(path, "utf8");
 const endpoint = read("app/api/assessment/generate/route.ts");
 const provider = read("lib/assessmentProvider.ts");
+const providerTelemetry = read("lib/assessmentProviderTelemetry.ts");
 const deadline = read("lib/assessmentDeadline.ts");
 const usage = read("lib/assessmentUsage.ts");
 const policy = read("lib/assessmentEntitlementPolicy.ts");
@@ -52,6 +53,12 @@ const checks = [
     assert.match(deadline, /Promise\.race\(\[runAttempts\(\), interruption\]\)/);
   }],
   ["provider errors never include the provider response body", () => assert.doesNotMatch(provider, /response\.text|console\./)],
+  ["provider timing logs exclude clinical content", () => {
+    assert.match(provider, /recordAssessmentProviderTiming/);
+    assert.match(providerTelemetry, /type ProviderTimingEvent/);
+    assert.doesNotMatch(providerTelemetry, /normalizedValue|sourceFactIds|assessmentText|responseBody|apiKey|clinicalText/);
+    assert.doesNotMatch(providerTelemetry, /console\.(?:warn|error|debug)/);
+  }],
   ["initial entitlement defaults are centralized", () => {
     assert.match(policy, /DEFAULT_ASSESSMENT_INCLUDED_QUANTITY = 30/);
     assert.match(policy, /DEFAULT_ASSESSMENT_ENTITLEMENT_WINDOW_DAYS = 30/);
