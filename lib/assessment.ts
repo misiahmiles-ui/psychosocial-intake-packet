@@ -235,7 +235,7 @@ export function createAssessmentWorkspace(
     rawFacts.push({
       domain: "participant_context",
       sourceStep: "identifying",
-      sourceField: "calculated_age",
+      sourceField: "calculated-age",
       sourceType: "form_response",
       temporalStatus: "current",
       normalizedValue: age,
@@ -252,7 +252,7 @@ export function createAssessmentWorkspace(
     rawFacts.push({
       domain: "living_support",
       sourceStep: "living",
-      sourceField: "primary_caregiver_role",
+      sourceField: "primary-caregiver-role",
       sourceType: "form_response",
       temporalStatus: "current",
       normalizedValue: `${caregiverRole} identified as the primary caregiver`,
@@ -309,7 +309,7 @@ export function createAssessmentWorkspace(
     rawFacts.push({
       domain: "cognitive_screening",
       sourceStep: "mental-status",
-      sourceField: `screening_item_${index + 1}`,
+      sourceField: `screening-item-${index + 1}`,
       sourceType: "screening_result",
       temporalStatus: "current",
       normalizedValue,
