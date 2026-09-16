@@ -35,7 +35,8 @@ const facts = [
 const draft = { blocks: [
   { section: "assessment", text: "The participant lives alone in an apartment.", sourceFactIds: ["fact-001"] },
   { section: "assessment", text: "The participant enjoys music and structured activities.", sourceFactIds: ["fact-002"] },
-  { section: "assessment", text: "The documented goals are improved socialization and maintenance of routine. No interpreter is needed.", sourceFactIds: ["fact-003", "fact-004"] },
+  { section: "assessment", text: "The documented goals are improved socialization and maintenance of routine.", sourceFactIds: ["fact-003"] },
+  { section: "assessment", text: "No interpreter is needed.", sourceFactIds: ["fact-004"] },
   { section: "strengths", text: "Enjoys music and structured activities.", sourceFactIds: ["fact-002"] },
   { section: "needs", text: "Improved socialization and maintenance of routine are identified goals.", sourceFactIds: ["fact-003"] },
   { section: "plan", text: "Consider structured music activities to support socialization.", sourceFactIds: ["fact-002", "fact-003"] },
@@ -45,7 +46,7 @@ let passed = 0;
 function test(name, run) { run(); passed++; console.log(`PASS ${name}`); }
 function altered(text, sourceFactIds = ["fact-001"], section = "assessment") {
   const result = structuredClone(draft);
-  result.blocks[section === "plan" ? 5 : 0] = { section, text, sourceFactIds };
+  result.blocks[result.blocks.findIndex((block) => block.section === section)] = { section, text, sourceFactIds };
   return result;
 }
 function rejects(candidate, category, source = facts) {
@@ -57,7 +58,7 @@ test("concise synthesis has direct evidence without model semantic metadata", ()
 test("short denied form answer uses its field context without becoming positive", () => rejects(altered("An interpreter is needed.", ["fact-004"]), "denial_changed_to_positive"));
 test("nonexistent evidence is blocked", () => rejects(altered("Lives alone.", ["fact-999"]), "missing_source"));
 test("uncited paragraph is blocked", () => rejects(altered("Lives alone.", []), "invalid_synthesis_shape"));
-test("unsupported sentence cannot hide beside a supported sentence", () => rejects(altered("Lives alone in an apartment. Enjoys competitive swimming."), "unsupported_statement"));
+test("a multi-sentence block is rejected before it can hide an unsupported statement", () => rejects(altered("Lives alone in an apartment. Enjoys competitive swimming."), "invalid_synthesis_shape"));
 test("unrelated citations cannot establish a diagnosis", () => rejects(altered("The participant is diagnosed with bipolar disorder.", ["fact-007"]), "unsupported_clinical_concept"));
 test("unsupported relationship is blocked", () => rejects(altered("The participant lives with a daughter in an apartment."), "unsupported_relationship"));
 test("unsupported numeric detail is blocked", () => rejects(altered("The participant lives in an apartment with 3 rooms."), "unsupported_numeric"));
@@ -145,6 +146,10 @@ test("new route contract refuses a draft missing independent review", () => asse
 generated = { ...draft, semanticReview: approved };
 result = await route.POST(v2request());
 test("new owner contract completes only with full semantic coverage and no charge", () => { assert.equal(result.status, 200); assert.equal(result.body.usage, null); assert.deepEqual([reserve, complete, release], [4, 1, 3]); });
+generated = draft;
+const v3request = () => new Request("https://example.test/api/assessment/generate", { method: "POST", headers: { "X-Assessment-Format": "synthesis-v3" }, body: JSON.stringify({ version: 1, jurisdiction: "NJ", facts, reviewedAmbiguousFindings: [] }) });
+result = await route.POST(v3request());
+test("v3 accepts a server-validated single-sentence ledger draft without a model verdict", () => assert.equal(result.status, 200));
 
 // Exercise the actual two-call provider operation. It may not self-certify a
 // draft, leak PHI to the reviewer, accept missing verdicts, or reset its budget.
@@ -167,6 +172,18 @@ try {
     for (const call of calls) { const body = JSON.parse(call.body); assert.equal(body.store, false); assert.equal(body.reasoning.effort, "low"); }
     assert.deepEqual(output.semanticReview, approved);
   });
+  calls = []; responses = [draft];
+  output = await provider.generateAssessmentClaims(input, undefined, true, false);
+  test("v3 completes with one provider draft and deterministic source-ledger validation", () => {
+    assert.equal(calls.length, 1);
+    assert.equal(output.semanticReview, undefined);
+  });
+  calls = []; responses = [altered("The participant has 90 cats in the apartment."), draft];
+  output = await provider.generateAssessmentClaims(input, undefined, true, false);
+  test("a deterministic grounding rejection gets one bounded replacement draft", () => {
+    assert.equal(calls.length, 2);
+    assert.equal(output.blocks.length, draft.blocks.length);
+  });
   calls = []; responses = [{ ...draft, semanticReview: approved }];
   await assert.rejects(provider.generateAssessmentClaims(input, undefined, true, true), (e) => e.failure === "invalid_response");
   test("draft provider cannot self-certify grounding", () => assert.equal(calls.length, 1));
@@ -176,7 +193,7 @@ try {
   calls = []; responses = [draft, { blocks: approved.blocks.map((b) => ({ ...b, verdict: "polarity_changed" })) }];
   await assert.rejects(provider.generateAssessmentClaims(input, undefined, true, true), (e) => e.failure === "grounding_failed");
   test("independent semantic rejection cannot be regenerated away", () => assert.equal(calls.length, 2));
-  calls = []; responses = [altered("Lives alone in an apartment. Email person@example.test.")];
+  calls = []; responses = [altered("Lives alone in an apartment with contact person@example.test.")];
   await assert.rejects(provider.generateAssessmentClaims(input, undefined, true, true), (e) => e.failure === "output_phi_blocked");
   test("provider-added PHI is blocked before the second outbound call", () => assert.equal(calls.length, 1));
 } finally {

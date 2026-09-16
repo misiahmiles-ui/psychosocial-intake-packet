@@ -200,7 +200,7 @@ export function AssessmentWorkflow({
         credentials: "same-origin",
         headers: {
           Authorization: `Bearer ${session.access_token}`,
-          ...(jurisdiction === "NJ" ? { "X-Assessment-Format": "synthesis-v2" } : {}),
+          ...(jurisdiction === "NJ" ? { "X-Assessment-Format": "synthesis-v3" } : {}),
           "Content-Type": "application/json"
         },
         body: JSON.stringify(requestBody),
@@ -221,7 +221,6 @@ export function AssessmentWorkflow({
         ? renderAssessmentSynthesis(result.synthesis, outboundFacts)
         : renderAssessmentFromClaims(checked.claims);
       if (
-        (jurisdiction === "NJ" && !result.synthesis?.semanticReview) ||
         !checked.valid ||
         (result.synthesis ? scanAssessmentSynthesis(result.synthesis, outboundFacts).length : scanGeneratedClaims(checked.claims).length) ||
         !rendered ||

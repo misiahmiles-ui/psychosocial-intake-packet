@@ -135,18 +135,21 @@ export async function POST(request: Request) {
       reservationId = reservation.reservationId;
     }
 
+    const assessmentFormat = request.headers.get("X-Assessment-Format") ?? "";
+    const usesNJSynthesis = assessmentRequest.jurisdiction === "NJ" && ["synthesis-v1", "synthesis-v2", "synthesis-v3"].includes(assessmentFormat);
+    const usesLegacyModelSemanticReview = assessmentRequest.jurisdiction === "NJ" && assessmentFormat === "synthesis-v2";
     const draft = await generateAssessmentClaims(
       assessmentRequest,
       request.signal,
-      assessmentRequest.jurisdiction === "NJ" && ["synthesis-v1", "synthesis-v2"].includes(request.headers.get("X-Assessment-Format") ?? ""),
-      assessmentRequest.jurisdiction === "NJ" && request.headers.get("X-Assessment-Format") === "synthesis-v2"
+      usesNJSynthesis,
+      usesLegacyModelSemanticReview
     );
     const synthesis = !Array.isArray(draft) ? draft : undefined;
     const claims = Array.isArray(draft) ? draft : [];
     const claimValidation = synthesis
       ? { ...validateAssessmentSynthesis(synthesis, assessmentRequest.facts), claims: [] }
       : validateClaims(claims, assessmentRequest.facts);
-    if (!claimValidation.valid || (assessmentRequest.jurisdiction === "NJ" && request.headers.get("X-Assessment-Format") === "synthesis-v2" && !synthesis?.semanticReview)) {
+    if (!claimValidation.valid || (usesLegacyModelSemanticReview && !synthesis?.semanticReview)) {
       recordAssessmentValidationFailure(claimValidation.issues, synthesis?.blocks.length ?? claims.length);
       return failure(
         "The generated assessment did not pass source-grounding validation. No generation was charged.",
@@ -177,7 +180,14 @@ export async function POST(request: Request) {
       ? null
       : await completeAssessmentGeneration(access.userId, reservationId as string);
     completed = true;
-    recordAssessmentValidationSuccess(performance.now() - startedAt, access.isOwner, Boolean(synthesis), Boolean(synthesis?.semanticReview));
+    const validationFormat = !synthesis
+      ? "claims-v1"
+      : assessmentFormat === "synthesis-v3"
+        ? "synthesis-v3"
+        : assessmentFormat === "synthesis-v2"
+          ? "synthesis-v2"
+          : "synthesis-v1";
+    recordAssessmentValidationSuccess(performance.now() - startedAt, access.isOwner, validationFormat);
     const authoritative = authoritativeAssessmentBlocks(assessmentRequest.facts);
     const sourceFactsUsed = new Set(synthesis
       ? [...synthesis.blocks.flatMap((block) => block.sourceFactIds), ...authoritative.safety.flatMap((block) => block.sourceFactIds), ...(authoritative.screening?.sourceFactIds ?? [])]

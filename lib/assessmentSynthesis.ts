@@ -26,6 +26,7 @@ export function parseAssessmentSynthesis(value: unknown): AssessmentSynthesis | 
     if (!record(raw) || Object.keys(raw).length !== 3 ||
       !SYNTHESIS_SECTIONS.includes(raw.section as never) || typeof raw.text !== "string" ||
       raw.text.trim().length < 5 || raw.text.length > 1100 || /\n/.test(raw.text) ||
+      sentences(raw.text).length !== 1 ||
       !Array.isArray(raw.sourceFactIds) || raw.sourceFactIds.length < 1 || raw.sourceFactIds.length > 16 ||
       raw.sourceFactIds.some((id) => typeof id !== "string" || !/^fact-\d{3}$/.test(id)) ||
       new Set(raw.sourceFactIds).size !== raw.sourceFactIds.length) return null;
