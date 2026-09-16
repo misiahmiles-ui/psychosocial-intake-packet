@@ -8,6 +8,7 @@ const usage = read("lib/assessmentUsage.ts");
 const policy = read("lib/assessmentEntitlementPolicy.ts");
 const access = read("lib/assessmentAccess.ts");
 const webhook = read("app/api/stripe/webhook/route.ts");
+const stripeServer = read("lib/stripe/server.ts");
 const migration = read("supabase/migrations/20260915_psychosocial_assessment_quota.sql");
 const workflow = read("components/AssessmentWorkflow.tsx");
 const marketing = read("components/marketing/AdultDayIntakeProMarketing.tsx");
@@ -45,24 +46,42 @@ const checks = [
   ["initial entitlement defaults are centralized", () => {
     assert.match(policy, /DEFAULT_ASSESSMENT_INCLUDED_QUANTITY = 30/);
     assert.match(policy, /DEFAULT_ASSESSMENT_ENTITLEMENT_WINDOW_DAYS = 30/);
+    assert.match(policy, /DEFAULT_ASSESSMENT_RECURRING_INCLUDED_QUANTITY = 30/);
     assert.match(usage, /PSYCHOSOCIAL_ASSESSMENT_INCLUDED_QUANTITY/);
     assert.match(usage, /PSYCHOSOCIAL_ASSESSMENT_ENTITLEMENT_WINDOW_DAYS/);
+    assert.match(usage, /PSYCHOSOCIAL_ASSESSMENT_RECURRING_INCLUDED_QUANTITY/);
   }],
   ["entitlement is purchase-scoped", () => {
     assert.match(migration, /purchase_reference text not null unique/);
     assert.match(migration, /num_nonnulls\(organization_id, user_id\) = 1/);
     assert.match(access, /purchaseReference: `stripe-checkout:/);
   }],
-  ["entitlement window is activation timestamp plus configured days", () => {
-    assert.match(migration, /v_expires_at := p_starts_at[\s\S]*make_interval\(hours => p_entitlement_window_days \* 24\)/);
-    assert.match(migration, /now\(\) < v_starts_at or now\(\) >= v_expires_at/);
+  ["initial entitlement window is activation timestamp plus configured days", () => {
+    assert.match(usage, /days \* 24 \* 60 \* 60 \* 1000/);
+    assert.match(migration, /expires_at > starts_at/);
   }],
   ["no calendar-month refill logic remains", () => {
     const entitlementSources = `${usage}\n${migration}\n${endpoint}`;
     assert.doesNotMatch(entitlementSources, /America\/New_York|quota_month|MONTHLY_LIMIT|currentAssessmentMonth|monthly_quota/);
   }],
-  ["purchase completion grants entitlement", () => assert.match(webhook, /handleCompletedCheckout[\s\S]*grantAssessmentGenerationEntitlement/)],
-  ["subscription changes do not grant entitlement", () => {
+  ["purchase completion grants the included entitlement", () => assert.match(webhook, /handleCompletedCheckout[\s\S]*createInitialAssessmentEntitlementGrant[\s\S]*grantAssessmentGenerationEntitlement/)],
+  ["purchase completion creates the deferred assessment subscription", () => {
+    assert.match(webhook, /ensureAssessmentGenerationSubscription/);
+    assert.match(stripeServer, /trial_end: trialEnd/);
+    assert.match(stripeServer, /psychosocial-assessment-generations:/);
+    assert.match(stripeServer, /STRIPE_PSYCHOSOCIAL_ASSESSMENT_GENERATIONS_MONTHLY_PRICE_ID/);
+  }],
+  ["paid assessment billing cycles grant recurring entitlement", () => {
+    assert.match(webhook, /event\.type === "invoice\.paid"/);
+    assert.match(webhook, /handlePaidAssessmentGenerationInvoice[\s\S]*createRecurringAssessmentEntitlementGrant/);
+    assert.match(webhook, /billing_reason === "subscription_cycle"/);
+    assert.match(webhook, /amount_paid > 0/);
+    assert.match(webhook, /psychosocial_assessment_generations/);
+    assert.match(webhook, /invoiceBillingCycle\(invoice, expectedMonthlyPriceId\)/);
+    assert.match(migration, /recurring_billing_cycle/);
+    assert.match(migration, /stripe_invoice_id text unique/);
+  }],
+  ["hosted-access subscription changes do not grant generation entitlement", () => {
     const subscriptionHandler = webhook.slice(webhook.indexOf("async function handleSubscriptionChange"));
     assert.doesNotMatch(subscriptionHandler, /grantAssessmentGenerationEntitlement/);
   }],
@@ -87,9 +106,14 @@ const checks = [
   }],
   ["database ledger supports stale reservation cleanup", () => assert.match(migration, /status = 'reserved'[\s\S]*reserved_at < now\(\)/)],
   ["only completed ledger rows consume entitlement", () => assert.match(migration, /where entitlement_id = [^\n]+[\s\S]*status = 'completed'/)],
+  ["shared users reserve from the same organization scope", () => {
+    assert.match(usage, /p_organization_id/);
+    assert.match(migration, /organization_id is not distinct from p_organization_id/);
+  }],
   ["quota RPCs are service-role only", () => assert.match(migration, /grant execute[\s\S]*service_role/)],
   ["purchase UI states the included generation entitlement", () => {
     assert.match(marketing, /INITIAL_ASSESSMENT_ENTITLEMENT_LABEL/);
+    assert.match(marketing, /RECURRING_ASSESSMENT_ENTITLEMENT_LABEL/);
     assert.match(policy, /AI-Assisted Psychosocial Assessment Generations Included/);
   }],
   ["workflow uses volatile React state only", () => assert.doesNotMatch(workflow, /localStorage|sessionStorage|indexedDB|supabase.*from\(/i)],

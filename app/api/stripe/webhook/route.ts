@@ -2,10 +2,13 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import {
   createStripeClient,
+  ensureAssessmentGenerationSubscription,
+  getAssessmentGenerationMonthlyPriceId,
   getStandardAccessPriceIds,
   hasStripeWebhookConfig
 } from "@/lib/stripe/server";
 import {
+  assertAssessmentGenerationSubscriptionAuthority,
   assertPsychosocialCheckoutAuthority,
   assertPsychosocialSubscriptionAuthority,
   PsychosocialCheckoutAuthorityError
@@ -19,7 +22,11 @@ import {
   SharedAccessConflictError,
   synchronizePsychosocialPurchase
 } from "@/lib/supabase/sharedAccessSync";
-import { grantAssessmentGenerationEntitlement } from "@/lib/assessmentUsage";
+import {
+  createInitialAssessmentEntitlementGrant,
+  createRecurringAssessmentEntitlementGrant,
+  grantAssessmentGenerationEntitlement
+} from "@/lib/assessmentUsage";
 import { hasSharedSuiteAccessEnabled } from "@/lib/supabase/sharedSuiteAccess";
 
 export async function POST(request: Request) {
@@ -58,6 +65,10 @@ export async function POST(request: Request) {
   try {
     if (event.type === "checkout.session.completed") {
       await handleCompletedCheckout(stripe, event);
+    }
+
+    if (event.type === "invoice.paid") {
+      await handlePaidAssessmentGenerationInvoice(stripe, event);
     }
 
     if (
@@ -148,7 +159,7 @@ async function handleCompletedCheckout(stripe: Stripe, event: Stripe.Event) {
     userId
   });
 
-  await grantAssessmentGenerationEntitlement(
+  const initialAssessmentEntitlement = createInitialAssessmentEntitlementGrant(
     hasSharedSuiteAccessEnabled()
       ? {
           kind: "organization",
@@ -163,6 +174,18 @@ async function handleCompletedCheckout(stripe: Stripe, event: Stripe.Event) {
           userId
         }
   );
+  await grantAssessmentGenerationEntitlement(initialAssessmentEntitlement);
+
+  await ensureAssessmentGenerationSubscription(stripe, {
+    customerId: customerId as string,
+    initialWindowExpiresAt: initialAssessmentEntitlement.expiresAt,
+    organizationId:
+      initialAssessmentEntitlement.kind === "organization"
+        ? initialAssessmentEntitlement.organizationId
+        : undefined,
+    parentCheckoutSessionId: session.id,
+    userId
+  });
 
   await updateUserAppMetadata(admin, userId, {
     access_granted_at: accessGrantedAt,
@@ -189,6 +212,96 @@ async function handleCompletedCheckout(stripe: Stripe, event: Stripe.Event) {
   if (profileUpdateError) {
     throw new Error(`Buyer profile synchronization failed: ${profileUpdateError.message}`);
   }
+}
+
+async function handlePaidAssessmentGenerationInvoice(
+  stripe: Stripe,
+  event: Stripe.Event
+) {
+  const invoice = event.data.object as Stripe.Invoice;
+  const subscriptionId = stripeInvoiceSubscriptionId(invoice);
+
+  if (!subscriptionId || !invoice.id || !isPaidAssessmentBillingCycle(invoice)) {
+    return;
+  }
+
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+  if (
+    subscription.metadata.product_code !==
+    "psychosocial_assessment_generations"
+  ) {
+    return;
+  }
+
+  const userId = subscription.metadata.supabase_user_id;
+  const customerId = stripeObjectId(subscription.customer);
+  const expectedMonthlyPriceId = getAssessmentGenerationMonthlyPriceId();
+
+  if (!userId || stripeObjectId(invoice.customer) !== customerId) {
+    throw new PsychosocialCheckoutAuthorityError(
+      "Stripe assessment-generation invoice is missing its authorized customer binding."
+    );
+  }
+
+  assertAssessmentGenerationSubscriptionAuthority({
+    customerId,
+    expectedMonthlyPriceId,
+    items: subscription.items.data.map((item) => ({
+      priceId: item.price.id,
+      quantity: item.quantity ?? null
+    })),
+    metadata: subscription.metadata,
+    userId
+  });
+
+  if (
+    !invoice.lines.data.some(
+      (line) => invoiceLinePriceId(line) === expectedMonthlyPriceId
+    )
+  ) {
+    throw new PsychosocialCheckoutAuthorityError(
+      "Stripe assessment-generation invoice does not contain the approved monthly price."
+    );
+  }
+
+  const billingCycle = invoiceBillingCycle(invoice, expectedMonthlyPriceId);
+  if (!billingCycle) {
+    throw new PsychosocialCheckoutAuthorityError(
+      "Stripe assessment-generation invoice is missing its billing-cycle window."
+    );
+  }
+
+  const organizationId = subscription.metadata.organization_id;
+  const recurringEntitlement = createRecurringAssessmentEntitlementGrant(
+    subscription.metadata.generation_scope === "organization"
+      ? {
+          billingCycleEndsAt: billingCycle.endsAt,
+          billingCycleStartsAt: billingCycle.startsAt,
+          invoiceId: invoice.id,
+          kind: "organization",
+          organizationId: organizationId ?? "",
+          subscriptionId
+        }
+      : {
+          billingCycleEndsAt: billingCycle.endsAt,
+          billingCycleStartsAt: billingCycle.startsAt,
+          invoiceId: invoice.id,
+          kind: "user",
+          subscriptionId,
+          userId
+        }
+  );
+
+  if (
+    recurringEntitlement.kind === "organization" &&
+    !recurringEntitlement.organizationId
+  ) {
+    throw new PsychosocialCheckoutAuthorityError(
+      "Stripe assessment-generation organization scope is missing."
+    );
+  }
+
+  await grantAssessmentGenerationEntitlement(recurringEntitlement);
 }
 
 async function handleSubscriptionChange(
@@ -259,10 +372,17 @@ async function handleSubscriptionChange(
   }
 }
 
-function stripeObjectId(
-  value: string | { id: string } | null | undefined
-): string | null {
-  return typeof value === "string" ? value : value?.id ?? null;
+function stripeObjectId(value: unknown): string | null {
+  if (typeof value === "string") return value;
+  if (
+    value &&
+    typeof value === "object" &&
+    "id" in value &&
+    typeof value.id === "string"
+  ) {
+    return value.id;
+  }
+  return null;
 }
 
 function subscriptionCurrentPeriodEnd(subscription: Stripe.Subscription) {
@@ -271,6 +391,56 @@ function subscriptionCurrentPeriodEnd(subscription: Stripe.Subscription) {
     ...subscription.items.data.map((item) => item.current_period_end ?? 0)
   );
   return periodEnd ? new Date(periodEnd * 1000).toISOString() : null;
+}
+
+function stripeInvoiceSubscriptionId(invoice: Stripe.Invoice) {
+  const invoiceRecord = invoice as unknown as Record<string, unknown>;
+  const legacySubscription = invoiceRecord.subscription;
+  const parent = invoiceRecord.parent as
+    | { subscription_details?: { subscription?: unknown } }
+    | null
+    | undefined;
+
+  return stripeObjectId(
+    legacySubscription ?? parent?.subscription_details?.subscription
+  );
+}
+
+function invoiceLinePriceId(line: unknown) {
+  const candidate = line as {
+    price?: unknown;
+    pricing?: { price_details?: { price?: unknown } };
+  };
+  return stripeObjectId(candidate.price ?? candidate.pricing?.price_details?.price);
+}
+
+function invoiceBillingCycle(invoice: Stripe.Invoice, expectedPriceId: string) {
+  for (const line of invoice.lines.data) {
+    if (invoiceLinePriceId(line) !== expectedPriceId) continue;
+    const period = (line as unknown as {
+      period?: { end?: unknown; start?: unknown };
+    }).period;
+    if (
+      typeof period?.start === "number" &&
+      typeof period.end === "number" &&
+      period.end > period.start
+    ) {
+      return {
+        endsAt: new Date(period.end * 1000).toISOString(),
+        startsAt: new Date(period.start * 1000).toISOString()
+      };
+    }
+  }
+  return null;
+}
+
+function isPaidAssessmentBillingCycle(invoice: Stripe.Invoice) {
+  const invoiceRecord = invoice as unknown as Record<string, unknown>;
+  return (
+    invoiceRecord.billing_reason === "subscription_cycle" &&
+    typeof invoiceRecord.amount_paid === "number" &&
+    invoiceRecord.amount_paid > 0
+  );
 }
 
 function isSubscriptionAccessActive(status: Stripe.Subscription.Status) {

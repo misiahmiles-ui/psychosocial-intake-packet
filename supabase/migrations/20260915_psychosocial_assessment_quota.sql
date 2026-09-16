@@ -1,12 +1,16 @@
 begin;
 
--- Purchase/account entitlement metadata only. These tables must never contain
--- intake facts, assessment text, participant identifiers, or clinical content.
+-- Purchase, subscription, and usage metadata only. These tables must never
+-- contain intake facts, assessment text, participant identifiers, or clinical content.
 create table if not exists public.psychosocial_assessment_generation_entitlements (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid references public.organizations(id) on delete cascade,
   user_id uuid references auth.users(id) on delete cascade,
+  entitlement_kind text not null
+    check (entitlement_kind in ('initial_purchase', 'recurring_billing_cycle')),
   purchase_reference text not null unique check (length(trim(purchase_reference)) > 0),
+  stripe_subscription_id text,
+  stripe_invoice_id text unique,
   included_quantity integer not null check (included_quantity > 0),
   starts_at timestamptz not null,
   expires_at timestamptz not null,
@@ -14,15 +18,26 @@ create table if not exists public.psychosocial_assessment_generation_entitlement
   constraint psychosocial_assessment_generation_entitlements_owner_check
     check (num_nonnulls(organization_id, user_id) = 1),
   constraint psychosocial_assessment_generation_entitlements_window_check
-    check (expires_at > starts_at)
+    check (expires_at > starts_at),
+  constraint psychosocial_assessment_generation_entitlements_source_check
+    check (
+      (entitlement_kind = 'initial_purchase'
+        and stripe_subscription_id is null
+        and stripe_invoice_id is null)
+      or (entitlement_kind = 'recurring_billing_cycle'
+        and stripe_subscription_id is not null
+        and stripe_invoice_id is not null)
+    )
 );
 
 create index if not exists psychosocial_assessment_entitlements_organization_idx
-  on public.psychosocial_assessment_generation_entitlements (organization_id, starts_at)
+  on public.psychosocial_assessment_generation_entitlements
+  (organization_id, starts_at desc)
   where organization_id is not null;
 
 create index if not exists psychosocial_assessment_entitlements_user_idx
-  on public.psychosocial_assessment_generation_entitlements (user_id, starts_at)
+  on public.psychosocial_assessment_generation_entitlements
+  (user_id, starts_at desc)
   where user_id is not null;
 
 create table if not exists public.psychosocial_assessment_generation_events (
@@ -64,10 +79,13 @@ revoke all on table public.psychosocial_assessment_generation_events
 create or replace function public.psychosocial_grant_assessment_generation_entitlement(
   p_organization_id uuid,
   p_user_id uuid,
+  p_entitlement_kind text,
   p_purchase_reference text,
+  p_stripe_subscription_id text,
+  p_stripe_invoice_id text,
   p_starts_at timestamptz,
-  p_included_quantity integer,
-  p_entitlement_window_days integer
+  p_expires_at timestamptz,
+  p_included_quantity integer
 )
 returns uuid
 language plpgsql
@@ -76,35 +94,49 @@ set search_path = public
 as $$
 declare
   v_entitlement_id uuid;
-  v_expires_at timestamptz;
 begin
   if num_nonnulls(p_organization_id, p_user_id) <> 1
+    or p_entitlement_kind not in ('initial_purchase', 'recurring_billing_cycle')
     or length(trim(coalesce(p_purchase_reference, ''))) = 0
     or p_starts_at is null
+    or p_expires_at is null
+    or p_expires_at <= p_starts_at
     or p_included_quantity < 1
     or p_included_quantity > 1000
-    or p_entitlement_window_days < 1
-    or p_entitlement_window_days > 365 then
+    or (
+      p_entitlement_kind = 'initial_purchase'
+      and (p_stripe_subscription_id is not null or p_stripe_invoice_id is not null)
+    )
+    or (
+      p_entitlement_kind = 'recurring_billing_cycle'
+      and (
+        length(trim(coalesce(p_stripe_subscription_id, ''))) = 0
+        or length(trim(coalesce(p_stripe_invoice_id, ''))) = 0
+      )
+    ) then
     raise exception 'Invalid assessment generation entitlement parameters.';
   end if;
-
-  v_expires_at := p_starts_at
-    + make_interval(hours => p_entitlement_window_days * 24);
 
   insert into public.psychosocial_assessment_generation_entitlements (
     organization_id,
     user_id,
+    entitlement_kind,
     purchase_reference,
+    stripe_subscription_id,
+    stripe_invoice_id,
     included_quantity,
     starts_at,
     expires_at
   ) values (
     p_organization_id,
     p_user_id,
+    p_entitlement_kind,
     trim(p_purchase_reference),
+    nullif(trim(coalesce(p_stripe_subscription_id, '')), ''),
+    nullif(trim(coalesce(p_stripe_invoice_id, '')), ''),
     p_included_quantity,
     p_starts_at,
-    v_expires_at
+    p_expires_at
   )
   on conflict (purchase_reference) do nothing
   returning id into v_entitlement_id;
@@ -115,13 +147,18 @@ begin
     where entitlement.purchase_reference = trim(p_purchase_reference)
       and entitlement.organization_id is not distinct from p_organization_id
       and entitlement.user_id is not distinct from p_user_id
+      and entitlement.entitlement_kind = p_entitlement_kind
+      and entitlement.stripe_subscription_id
+        is not distinct from nullif(trim(coalesce(p_stripe_subscription_id, '')), '')
+      and entitlement.stripe_invoice_id
+        is not distinct from nullif(trim(coalesce(p_stripe_invoice_id, '')), '')
       and entitlement.included_quantity = p_included_quantity
       and entitlement.starts_at = p_starts_at
-      and entitlement.expires_at = v_expires_at;
+      and entitlement.expires_at = p_expires_at;
   end if;
 
   if v_entitlement_id is null then
-    raise exception 'The purchase reference is already bound to another entitlement.';
+    raise exception 'The entitlement reference is already bound to another record.';
   end if;
 
   return v_entitlement_id;
@@ -130,7 +167,8 @@ $$;
 
 create or replace function public.psychosocial_reserve_assessment_generation(
   p_user_id uuid,
-  p_entitlement_id uuid,
+  p_organization_id uuid,
+  p_user_scope_id uuid,
   p_rapid_limit integer,
   p_rapid_window_seconds integer,
   p_reservation_ttl_seconds integer
@@ -141,6 +179,7 @@ security definer
 set search_path = public
 as $$
 declare
+  v_entitlement_id uuid;
   v_included_quantity integer;
   v_starts_at timestamptz;
   v_expires_at timestamptz;
@@ -148,46 +187,16 @@ declare
   v_active_reserved integer;
   v_recent_attempts integer;
   v_reservation_id uuid;
+  v_scope_has_entitlement boolean;
 begin
-  if p_rapid_limit < 1
+  if num_nonnulls(p_organization_id, p_user_scope_id) <> 1
+    or p_rapid_limit < 1
     or p_rapid_window_seconds < 1
     or p_reservation_ttl_seconds < 1 then
     raise exception 'Invalid assessment generation reservation parameters.';
   end if;
 
-  select
-    entitlement.included_quantity,
-    entitlement.starts_at,
-    entitlement.expires_at
-  into
-    v_included_quantity,
-    v_starts_at,
-    v_expires_at
-  from public.psychosocial_assessment_generation_entitlements entitlement
-  where entitlement.id = p_entitlement_id
-    and (
-      entitlement.user_id = p_user_id
-      or (
-        entitlement.organization_id is not null
-        and exists (
-          select 1
-          from public.organization_memberships membership
-          join public.workflow_seat_assignments assignment
-            on assignment.organization_id = membership.organization_id
-           and assignment.user_id = membership.user_id
-           and assignment.product_code = 'psychosocial'
-          join public.organization_product_entitlements product_entitlement
-            on product_entitlement.organization_id = assignment.organization_id
-           and product_entitlement.product_code = assignment.product_code
-           and product_entitlement.status = 'active'
-          where membership.organization_id = entitlement.organization_id
-            and membership.user_id = p_user_id
-            and membership.status = 'active'
-        )
-      )
-    );
-
-  if v_included_quantity is null then
+  if p_user_scope_id is not null and p_user_scope_id <> p_user_id then
     return jsonb_build_object(
       'allowed', false,
       'reason', 'entitlement_unavailable',
@@ -200,7 +209,73 @@ begin
     );
   end if;
 
-  perform pg_advisory_xact_lock(hashtextextended(p_entitlement_id::text, 0));
+  if p_organization_id is not null and not exists (
+    select 1
+    from public.organization_memberships membership
+    join public.workflow_seat_assignments assignment
+      on assignment.organization_id = membership.organization_id
+     and assignment.user_id = membership.user_id
+     and assignment.product_code = 'psychosocial'
+    join public.organization_product_entitlements product_entitlement
+      on product_entitlement.organization_id = assignment.organization_id
+     and product_entitlement.product_code = assignment.product_code
+     and product_entitlement.status = 'active'
+    where membership.organization_id = p_organization_id
+      and membership.user_id = p_user_id
+      and membership.status = 'active'
+  ) then
+    return jsonb_build_object(
+      'allowed', false,
+      'reason', 'entitlement_unavailable',
+      'reservationId', null,
+      'includedQuantity', 0,
+      'successfulGenerationsUsed', 0,
+      'remainingGenerations', 0,
+      'entitlementStartsAt', null,
+      'entitlementExpiresAt', null
+    );
+  end if;
+
+  select exists(
+    select 1
+    from public.psychosocial_assessment_generation_entitlements entitlement
+    where entitlement.organization_id is not distinct from p_organization_id
+      and entitlement.user_id is not distinct from p_user_scope_id
+  ) into v_scope_has_entitlement;
+
+  select
+    entitlement.id,
+    entitlement.included_quantity,
+    entitlement.starts_at,
+    entitlement.expires_at
+  into
+    v_entitlement_id,
+    v_included_quantity,
+    v_starts_at,
+    v_expires_at
+  from public.psychosocial_assessment_generation_entitlements entitlement
+  where entitlement.organization_id is not distinct from p_organization_id
+    and entitlement.user_id is not distinct from p_user_scope_id
+    and now() >= entitlement.starts_at
+    and now() < entitlement.expires_at
+  order by entitlement.starts_at desc
+  limit 1;
+
+  if v_entitlement_id is null then
+    return jsonb_build_object(
+      'allowed', false,
+      'reason', case when v_scope_has_entitlement
+        then 'entitlement_inactive' else 'entitlement_unavailable' end,
+      'reservationId', null,
+      'includedQuantity', 0,
+      'successfulGenerationsUsed', 0,
+      'remainingGenerations', 0,
+      'entitlementStartsAt', null,
+      'entitlementExpiresAt', null
+    );
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended(v_entitlement_id::text, 0));
 
   delete from public.psychosocial_assessment_generation_events
   where status = 'released'
@@ -208,31 +283,18 @@ begin
 
   update public.psychosocial_assessment_generation_events
   set status = 'released'
-  where entitlement_id = p_entitlement_id
+  where entitlement_id = v_entitlement_id
     and status = 'reserved'
     and reserved_at < now() - make_interval(secs => p_reservation_ttl_seconds);
 
   select count(*) into v_completed
   from public.psychosocial_assessment_generation_events
-  where entitlement_id = p_entitlement_id
+  where entitlement_id = v_entitlement_id
     and status = 'completed';
-
-  if now() < v_starts_at or now() >= v_expires_at then
-    return jsonb_build_object(
-      'allowed', false,
-      'reason', 'entitlement_inactive',
-      'reservationId', null,
-      'includedQuantity', v_included_quantity,
-      'successfulGenerationsUsed', v_completed,
-      'remainingGenerations', greatest(v_included_quantity - v_completed, 0),
-      'entitlementStartsAt', v_starts_at,
-      'entitlementExpiresAt', v_expires_at
-    );
-  end if;
 
   select count(*) into v_active_reserved
   from public.psychosocial_assessment_generation_events
-  where entitlement_id = p_entitlement_id
+  where entitlement_id = v_entitlement_id
     and status = 'reserved';
 
   if v_completed + v_active_reserved >= v_included_quantity then
@@ -271,7 +333,7 @@ begin
     initiated_by_user_id,
     status
   ) values (
-    p_entitlement_id,
+    v_entitlement_id,
     p_user_id,
     'reserved'
   ) returning id into v_reservation_id;
@@ -353,10 +415,10 @@ as $$
 $$;
 
 revoke all on function public.psychosocial_grant_assessment_generation_entitlement(
-  uuid, uuid, text, timestamptz, integer, integer
+  uuid, uuid, text, text, text, text, timestamptz, timestamptz, integer
 ) from public;
 revoke all on function public.psychosocial_reserve_assessment_generation(
-  uuid, uuid, integer, integer, integer
+  uuid, uuid, uuid, integer, integer, integer
 ) from public;
 revoke all on function public.psychosocial_complete_assessment_generation(
   uuid, uuid
@@ -366,10 +428,10 @@ revoke all on function public.psychosocial_release_assessment_generation(
 ) from public;
 
 grant execute on function public.psychosocial_grant_assessment_generation_entitlement(
-  uuid, uuid, text, timestamptz, integer, integer
+  uuid, uuid, text, text, text, text, timestamptz, timestamptz, integer
 ) to service_role;
 grant execute on function public.psychosocial_reserve_assessment_generation(
-  uuid, uuid, integer, integer, integer
+  uuid, uuid, uuid, integer, integer, integer
 ) to service_role;
 grant execute on function public.psychosocial_complete_assessment_generation(
   uuid, uuid
@@ -379,7 +441,7 @@ grant execute on function public.psychosocial_release_assessment_generation(
 ) to service_role;
 
 comment on table public.psychosocial_assessment_generation_entitlements is
-  'Purchase-scoped assessment-generation quantities and 30-day activation windows only; never PHI.';
+  'Purchase- and Stripe-billing-cycle generation entitlement metadata only; never PHI.';
 comment on table public.psychosocial_assessment_generation_events is
   'Assessment-generation reservation/completion metadata only; never PHI or clinical content.';
 

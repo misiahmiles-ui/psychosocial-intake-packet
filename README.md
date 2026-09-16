@@ -47,9 +47,9 @@ The assessment generator follows the existing LeanMaster Integrated Note Engine 
 
 ### Generation entitlement
 
-A qualifying Psychosocial Intake purchase/activation grants **30 AI-Assisted Psychosocial Assessment Generations Included**. This is a one-time pool attached to that purchase entitlement, not a recurring monthly subscription benefit. The entitlement window starts at the recorded purchase/activation timestamp and ends exactly 30 days later. Unused credits expire at the end of that window, do not roll over, and are not refilled at a calendar-month boundary or by a hosted-access subscription renewal. For shared-suite accounts, authorized Psychosocial users at the facility consume the same purchase-scoped pool; a legacy single-user activation uses a purchase-scoped pool for that user.
+A qualifying Psychosocial Intake purchase/activation grants **30 AI-Assisted Psychosocial Assessment Generations Included**. This one-time pool begins at the recorded activation timestamp, ends exactly 30 days later, and does not roll over. After that included period, the application creates a separate **AI-Assisted Psychosocial Assessment Generations** Stripe subscription at **$10/month**. Each successfully paid Stripe billing cycle grants a new non-rollover pool of 30 successful generations for that actual billing-cycle window. It is never a calendar-month reset. For shared-suite accounts, authorized Psychosocial users at the facility consume the same facility purchase/billing-cycle pool; a legacy single-user activation uses that individual account's pool.
 
-The default quantity and window live centrally in `lib/assessmentEntitlementPolicy.ts` and `lib/assessmentUsage.ts`. Server enforcement can be configured with `PSYCHOSOCIAL_ASSESSMENT_INCLUDED_QUANTITY` (default `30`) and `PSYCHOSOCIAL_ASSESSMENT_ENTITLEMENT_WINDOW_DAYS` (default `30`). Future additional-generation packs are intentionally outside this implementation, and this change adds no Stripe product or price.
+The default quantity and window live centrally in `lib/assessmentEntitlementPolicy.ts` and `lib/assessmentUsage.ts`. Server enforcement can be configured with `PSYCHOSOCIAL_ASSESSMENT_INCLUDED_QUANTITY` (default `30`), `PSYCHOSOCIAL_ASSESSMENT_ENTITLEMENT_WINDOW_DAYS` (default `30`), and `PSYCHOSOCIAL_ASSESSMENT_RECURRING_INCLUDED_QUANTITY` (default `30`). The recurring Stripe Price ID is server-only in `STRIPE_PSYCHOSOCIAL_ASSESSMENT_GENERATIONS_MONTHLY_PRICE_ID`. No additional 30/40/50-generation packs are implemented.
 
 Only a completed result that passes response-schema, output-PHI, provenance/source-grounding, and protected clinical/safety validation consumes one credit. PHI Review Gate activity, blocked PHI transmission, unresolved safety conflicts, provider/API failures, timeouts, aborted requests, schema failures, output-PHI failures, provenance failures, protected clinical/safety validation failures, and every other failed attempt release the reservation and consume zero credits. A successful clinician-requested regeneration generates another validated assessment and consumes one additional credit. Failed attempts remain briefly as account-level, nonclinical rate-limit events so repeated failures cannot bypass abuse controls; they never count as successful entitlement usage.
 
@@ -59,10 +59,10 @@ Do not deploy this feature until the owner has reviewed the branch and completed
 
 1. Open the existing Supabase project used by this Psychosocial Intake application.
 2. Confirm the shared-suite schema migration is present, then in **SQL Editor** create a new query, paste `supabase/migrations/20260915_psychosocial_assessment_quota.sql`, and run it once.
-3. In **Table Editor**, verify `psychosocial_assessment_generation_entitlements` contains only purchase/account entitlement metadata (`organization_id` or `user_id`, purchase reference, included quantity, start, and expiration) and `psychosocial_assessment_generation_events` contains only reservation/completion metadata. Confirm row-level security is enabled on both. Neither table may contain participant clinical content or PHI.
+3. In **Table Editor**, verify `psychosocial_assessment_generation_entitlements` contains only purchase, Stripe subscription/invoice, account-scope, included quantity, and billing-window metadata; `psychosocial_assessment_generation_events` contains only reservation/completion metadata. Confirm row-level security is enabled on both. Neither table may contain participant clinical content or PHI.
 4. In the Netlify site for this application, open **Site configuration → Environment variables**.
 5. Add `OPENAI_API_KEY` as a server-only value. It may be a key from the same approved OpenAI account/project/billing source used by LeanMaster, but it must be configured independently for this Netlify site. Never use a `NEXT_PUBLIC_` prefix.
-6. Add or confirm `OPENAI_MODEL`, `PSYCHOSOCIAL_ASSESSMENT_INCLUDED_QUANTITY=30`, `PSYCHOSOCIAL_ASSESSMENT_ENTITLEMENT_WINDOW_DAYS=30`, `PSYCHOSOCIAL_ASSESSMENT_RAPID_LIMIT=5`, `PSYCHOSOCIAL_ASSESSMENT_RAPID_WINDOW_SECONDS=60`, `PSYCHOSOCIAL_ASSESSMENT_RESERVATION_TTL_SECONDS=600`, and `PSYCHOSOCIAL_ASSESSMENT_TIMEOUT_MS=75000`.
+6. Add or confirm `OPENAI_MODEL`, `PSYCHOSOCIAL_ASSESSMENT_INCLUDED_QUANTITY=30`, `PSYCHOSOCIAL_ASSESSMENT_ENTITLEMENT_WINDOW_DAYS=30`, `PSYCHOSOCIAL_ASSESSMENT_RECURRING_INCLUDED_QUANTITY=30`, `PSYCHOSOCIAL_ASSESSMENT_RAPID_LIMIT=5`, `PSYCHOSOCIAL_ASSESSMENT_RAPID_WINDOW_SECONDS=60`, `PSYCHOSOCIAL_ASSESSMENT_RESERVATION_TTL_SECONDS=600`, `PSYCHOSOCIAL_ASSESSMENT_TIMEOUT_MS=75000`, and the server-only `STRIPE_PSYCHOSOCIAL_ASSESSMENT_GENERATIONS_MONTHLY_PRICE_ID`.
 7. Scope the variables to the intended Netlify contexts, save them, and redeploy only after review. Do not copy LeanMaster's `.env` file or source code into this repository.
 
 The API key never belongs in source code, browser code, a public environment variable, Supabase tables, Stripe metadata, or logs. Applying the migration and adding environment variables are manual owner actions; this branch does not change the live database or deploy the site.
@@ -77,7 +77,7 @@ pnpm build
 pnpm run verify:assessment-pdf
 ```
 
-A live provider smoke test must be performed only after the separate server environment and entitlement migration are present. Use fictitious data; verify a successful validated result increments completed usage once, a successful regeneration increments it once more, a forced failure does not increment usage, and subscription/calendar changes do not grant or refill credits.
+A live provider smoke test must be performed only after the separate server environment and entitlement migration are present. Use fictitious data; verify a successful validated result increments completed usage once, a successful regeneration increments it once more, a forced failure does not increment usage, the included pool ends after 30 exact days, and a paid assessment-generation Stripe invoice creates exactly one new 30-generation billing-cycle pool.
 
 ## Editable draft PDF behavior
 
@@ -149,7 +149,7 @@ This project is set up for the simple paid-access model:
 
 1. Netlify hosts the web app.
 2. Supabase stores buyer accounts and access status only.
-3. Stripe collects the $487 upfront payment and starts the $19/month hosted access and maintenance subscription.
+3. Stripe collects the $487 upfront payment and starts the $19/month hosted access and maintenance subscription. The webhook also creates the separate $10/month assessment-generation subscription with a 30-day trial that matches the included generation period.
 4. Stripe sends webhooks back to the app.
 5. The webhook marks the buyer profile as `has_access = true` while the subscription is active.
 6. Subscription update/cancellation webhooks update access when Stripe reports the subscription is no longer active.
@@ -243,6 +243,7 @@ STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
 STRIPE_STANDARD_ACCESS_UPFRONT_PRICE_ID=
 STRIPE_STANDARD_ACCESS_MONTHLY_PRICE_ID=
+STRIPE_PSYCHOSOCIAL_ASSESSMENT_GENERATIONS_MONTHLY_PRICE_ID=
 STANDARD_ACCESS_UPFRONT_PRICE_CENTS=48700
 STANDARD_ACCESS_MONTHLY_PRICE_CENTS=1900
 ```
@@ -255,7 +256,7 @@ In Stripe, create a webhook endpoint pointing to:
 https://your-netlify-site.netlify.app/api/stripe/webhook
 ```
 
-Send the `checkout.session.completed`, `customer.subscription.updated`, and `customer.subscription.deleted` events to that endpoint. Copy the webhook signing secret into `STRIPE_WEBHOOK_SECRET`.
+Send the `checkout.session.completed`, `invoice.paid`, `customer.subscription.updated`, and `customer.subscription.deleted` events to that endpoint. Copy the webhook signing secret into `STRIPE_WEBHOOK_SECRET`.
 
 Do not hard-code secret keys, Stripe secret keys, Supabase service role keys, backend payment logic, or payment credentials in browser code. Use Netlify environment variables.
 

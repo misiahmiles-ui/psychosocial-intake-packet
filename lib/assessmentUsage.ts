@@ -2,7 +2,8 @@ import "server-only";
 
 import {
   DEFAULT_ASSESSMENT_ENTITLEMENT_WINDOW_DAYS,
-  DEFAULT_ASSESSMENT_INCLUDED_QUANTITY
+  DEFAULT_ASSESSMENT_INCLUDED_QUANTITY,
+  DEFAULT_ASSESSMENT_RECURRING_INCLUDED_QUANTITY
 } from "@/lib/assessmentEntitlementPolicy";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 
@@ -14,19 +15,43 @@ export type AssessmentUsage = {
   entitlementExpiresAt: string;
 };
 
-export type AssessmentEntitlementActivation =
+type AssessmentEntitlementScope =
   | {
       kind: "organization";
       organizationId: string;
-      purchaseReference: string;
-      startsAt: string;
     }
   | {
       kind: "user";
       userId: string;
+    };
+
+export type AssessmentEntitlementActivation = AssessmentEntitlementScope & {
+  purchaseReference: string;
+  startsAt: string;
+};
+
+export type AssessmentRecurringEntitlement = AssessmentEntitlementScope & {
+  billingCycleEndsAt: string;
+  billingCycleStartsAt: string;
+  invoiceId: string;
+  subscriptionId: string;
+};
+
+type AssessmentEntitlementGrant =
+  | (AssessmentEntitlementActivation & {
+      entitlementKind: "initial_purchase";
+      expiresAt: string;
+      includedQuantity: number;
+      invoiceId?: undefined;
+      subscriptionId?: undefined;
+    })
+  | (AssessmentRecurringEntitlement & {
+      entitlementKind: "recurring_billing_cycle";
+      expiresAt: string;
+      includedQuantity: number;
       purchaseReference: string;
       startsAt: string;
-    };
+    });
 
 type ReservationResult = {
   allowed: boolean;
@@ -47,6 +72,7 @@ type ReservationResult = {
 export type AssessmentGenerationConfig = {
   includedQuantity: number;
   entitlementWindowDays: number;
+  recurringIncludedQuantity: number;
   rapidLimit: number;
   rapidWindowSeconds: number;
   reservationTtlSeconds: number;
@@ -81,6 +107,12 @@ export function getAssessmentGenerationConfig(): AssessmentGenerationConfig {
       1,
       365
     ),
+    recurringIncludedQuantity: integerEnvironmentValue(
+      "PSYCHOSOCIAL_ASSESSMENT_RECURRING_INCLUDED_QUANTITY",
+      DEFAULT_ASSESSMENT_RECURRING_INCLUDED_QUANTITY,
+      1,
+      1000
+    ),
     rapidLimit: integerEnvironmentValue(
       "PSYCHOSOCIAL_ASSESSMENT_RAPID_LIMIT",
       5,
@@ -108,21 +140,55 @@ export function getAssessmentGenerationConfig(): AssessmentGenerationConfig {
   };
 }
 
-export async function grantAssessmentGenerationEntitlement(
+export function createInitialAssessmentEntitlementGrant(
   activation: AssessmentEntitlementActivation
-) {
+): AssessmentEntitlementGrant {
   const config = getAssessmentGenerationConfig();
+  return {
+    ...activation,
+    entitlementKind: "initial_purchase",
+    expiresAt: addExactDays(activation.startsAt, config.entitlementWindowDays),
+    includedQuantity: config.includedQuantity
+  };
+}
+
+export function createRecurringAssessmentEntitlementGrant(
+  entitlement: AssessmentRecurringEntitlement
+): AssessmentEntitlementGrant {
+  const config = getAssessmentGenerationConfig();
+  return {
+    ...entitlement,
+    entitlementKind: "recurring_billing_cycle",
+    expiresAt: entitlement.billingCycleEndsAt,
+    includedQuantity: config.recurringIncludedQuantity,
+    purchaseReference: `stripe-invoice:${entitlement.invoiceId}`,
+    startsAt: entitlement.billingCycleStartsAt
+  };
+}
+
+export async function grantAssessmentGenerationEntitlement(
+  grant: AssessmentEntitlementGrant
+) {
   const admin = createSupabaseAdminClient();
   const { data, error } = await admin.rpc(
     "psychosocial_grant_assessment_generation_entitlement",
     {
-      p_entitlement_window_days: config.entitlementWindowDays,
-      p_included_quantity: config.includedQuantity,
+      p_entitlement_kind: grant.entitlementKind,
+      p_expires_at: grant.expiresAt,
+      p_included_quantity: grant.includedQuantity,
       p_organization_id:
-        activation.kind === "organization" ? activation.organizationId : null,
-      p_purchase_reference: activation.purchaseReference,
-      p_starts_at: activation.startsAt,
-      p_user_id: activation.kind === "user" ? activation.userId : null
+        grant.kind === "organization" ? grant.organizationId : null,
+      p_purchase_reference: grant.purchaseReference,
+      p_starts_at: grant.startsAt,
+      p_stripe_invoice_id:
+        grant.entitlementKind === "recurring_billing_cycle"
+          ? grant.invoiceId
+          : null,
+      p_stripe_subscription_id:
+        grant.entitlementKind === "recurring_billing_cycle"
+          ? grant.subscriptionId
+          : null,
+      p_user_id: grant.kind === "user" ? grant.userId : null
     }
   );
 
@@ -138,17 +204,22 @@ export async function reserveAssessmentGeneration(
 ): Promise<ReservationResult> {
   if (!activation) return unavailableReservation();
 
+  await grantAssessmentGenerationEntitlement(
+    createInitialAssessmentEntitlementGrant(activation)
+  );
+
   const config = getAssessmentGenerationConfig();
-  const entitlementId = await grantAssessmentGenerationEntitlement(activation);
   const admin = createSupabaseAdminClient();
   const { data, error } = await admin.rpc(
     "psychosocial_reserve_assessment_generation",
     {
-      p_entitlement_id: entitlementId,
+      p_organization_id:
+        activation.kind === "organization" ? activation.organizationId : null,
       p_rapid_limit: config.rapidLimit,
       p_rapid_window_seconds: config.rapidWindowSeconds,
       p_reservation_ttl_seconds: config.reservationTtlSeconds,
-      p_user_id: userId
+      p_user_id: userId,
+      p_user_scope_id: activation.kind === "user" ? activation.userId : null
     }
   );
   if (error || !isReservationResult(data)) {
@@ -187,6 +258,14 @@ export async function releaseAssessmentGeneration(
   if (error) {
     throw new Error("Assessment generation entitlement could not be released.");
   }
+}
+
+function addExactDays(startsAt: string, days: number) {
+  const start = new Date(startsAt);
+  if (Number.isNaN(start.getTime())) {
+    throw new Error("Assessment entitlement activation timestamp is invalid.");
+  }
+  return new Date(start.getTime() + days * 24 * 60 * 60 * 1000).toISOString();
 }
 
 function isUsage(value: unknown): value is AssessmentUsage {

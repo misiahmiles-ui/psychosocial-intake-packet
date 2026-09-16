@@ -25,7 +25,8 @@ import {
 } from "@/lib/assessment";
 import {
   INITIAL_ASSESSMENT_ENTITLEMENT_DETAIL,
-  INITIAL_ASSESSMENT_ENTITLEMENT_LABEL
+  INITIAL_ASSESSMENT_ENTITLEMENT_LABEL,
+  RECURRING_ASSESSMENT_ENTITLEMENT_LABEL
 } from "@/lib/assessmentEntitlementPolicy";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import type {
@@ -283,7 +284,7 @@ export function AssessmentWorkflow({
             <WandSparkles className="h-4 w-4" aria-hidden="true" />
             Generate Psychosocial Assessment
           </button>
-          <p className="mt-3 text-sm leading-6 text-[#52645f]">{INITIAL_ASSESSMENT_ENTITLEMENT_LABEL}. {INITIAL_ASSESSMENT_ENTITLEMENT_DETAIL} Only a successful, validated assessment counts.</p>
+          <p className="mt-3 text-sm leading-6 text-[#52645f]">{INITIAL_ASSESSMENT_ENTITLEMENT_LABEL}. {INITIAL_ASSESSMENT_ENTITLEMENT_DETAIL} Afterward, {RECURRING_ASSESSMENT_ENTITLEMENT_LABEL}. Only a successful, validated assessment counts.</p>
         </div>
       ) : null}
 
