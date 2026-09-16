@@ -57,7 +57,7 @@ export function ReviewPacket({
       </div>
       {!publicPreview && acceptedAssessment ? (
         acceptedAssessment.localRevisionToken === currentRevisionToken ? (
-          <section className="mt-6 rounded-lg border border-[#b9d9d1] bg-mint p-5" aria-labelledby="accepted-assessment-title">
+          <section className="accepted-assessment mt-6 rounded-lg border border-[#b9d9d1] bg-mint p-5" aria-labelledby="accepted-assessment-title">
             <p className="text-sm font-bold uppercase tracking-[0.16em] text-clay">
               Accepted assessment
             </p>
