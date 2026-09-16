@@ -240,7 +240,10 @@ export function IntakeApp({
             {isReview ? (
               <ReviewPacket packet={methods.getValues()} />
             ) : (
-              <FormSection step={activeStep} />
+              <FormSection
+                step={activeStep}
+                jurisdiction={activeJurisdiction}
+              />
             )}
 
             <div className="flex flex-wrap items-center justify-between gap-3">
