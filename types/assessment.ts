@@ -251,9 +251,11 @@ export type ValidatedAssessmentResponse = {
   assessmentText: string;
   validation: AssessmentValidationSummary;
   usage: {
-    monthlyLimit: number;
-    successfulGenerationsThisMonth: number;
-    remainingSuccessfulGenerations: number;
+    includedQuantity: number;
+    successfulGenerationsUsed: number;
+    remainingGenerations: number;
+    entitlementStartsAt: string;
+    entitlementExpiresAt: string;
   };
 };
 

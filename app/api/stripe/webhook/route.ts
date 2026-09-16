@@ -19,6 +19,8 @@ import {
   SharedAccessConflictError,
   synchronizePsychosocialPurchase
 } from "@/lib/supabase/sharedAccessSync";
+import { grantAssessmentGenerationEntitlement } from "@/lib/assessmentUsage";
+import { hasSharedSuiteAccessEnabled } from "@/lib/supabase/sharedSuiteAccess";
 
 export async function POST(request: Request) {
   if (!hasStripeWebhookConfig() || !hasSupabaseAdminConfig()) {
@@ -135,7 +137,7 @@ async function handleCompletedCheckout(stripe: Stripe, event: Stripe.Event) {
   const admin = createSupabaseAdminClient();
   const accessGrantedAt = new Date(event.created * 1000).toISOString();
 
-  await synchronizePsychosocialPurchase(admin, {
+  const organizationId = await synchronizePsychosocialPurchase(admin, {
     allowInactiveSubscriptionReplacement: true,
     checkoutSessionId: session.id,
     currentPeriodEnd: subscriptionCurrentPeriodEnd(subscription),
@@ -145,6 +147,22 @@ async function handleCompletedCheckout(stripe: Stripe, event: Stripe.Event) {
     upfrontPaidAt: accessGrantedAt,
     userId
   });
+
+  await grantAssessmentGenerationEntitlement(
+    hasSharedSuiteAccessEnabled()
+      ? {
+          kind: "organization",
+          organizationId,
+          purchaseReference: `stripe-checkout:${session.id}`,
+          startsAt: accessGrantedAt
+        }
+      : {
+          kind: "user",
+          purchaseReference: `stripe-checkout:${session.id}`,
+          startsAt: accessGrantedAt,
+          userId
+        }
+  );
 
   await updateUserAppMetadata(admin, userId, {
     access_granted_at: accessGrantedAt,

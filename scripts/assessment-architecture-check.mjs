@@ -5,8 +5,12 @@ const read = (path) => readFileSync(path, "utf8");
 const endpoint = read("app/api/assessment/generate/route.ts");
 const provider = read("lib/assessmentProvider.ts");
 const usage = read("lib/assessmentUsage.ts");
+const policy = read("lib/assessmentEntitlementPolicy.ts");
+const access = read("lib/assessmentAccess.ts");
+const webhook = read("app/api/stripe/webhook/route.ts");
 const migration = read("supabase/migrations/20260915_psychosocial_assessment_quota.sql");
 const workflow = read("components/AssessmentWorkflow.tsx");
+const marketing = read("components/marketing/AdultDayIntakeProMarketing.tsx");
 const pdf = read("lib/pdfExport.ts");
 const guidance = read("lib/fieldGuidance.ts");
 const fieldInput = read("components/FieldInput.tsx");
@@ -38,20 +42,56 @@ const checks = [
   ["provider has an explicit output token limit", () => assert.match(provider, /max_output_tokens: 6000/)],
   ["provider has an abortable timeout", () => assert.match(provider, /setTimeout[\s\S]*controller\.abort/)],
   ["provider errors never include the provider response body", () => assert.doesNotMatch(provider, /response\.text|console\./)],
-  ["monthly quota default is centralized at 30", () => assert.match(usage, /PSYCHOSOCIAL_ASSESSMENT_MONTHLY_LIMIT"[\s\S]*30/)],
-  ["quota uses an Eastern calendar month", () => assert.match(usage, /America\/New_York/)],
+  ["initial entitlement defaults are centralized", () => {
+    assert.match(policy, /DEFAULT_ASSESSMENT_INCLUDED_QUANTITY = 30/);
+    assert.match(policy, /DEFAULT_ASSESSMENT_ENTITLEMENT_WINDOW_DAYS = 30/);
+    assert.match(usage, /PSYCHOSOCIAL_ASSESSMENT_INCLUDED_QUANTITY/);
+    assert.match(usage, /PSYCHOSOCIAL_ASSESSMENT_ENTITLEMENT_WINDOW_DAYS/);
+  }],
+  ["entitlement is purchase-scoped", () => {
+    assert.match(migration, /purchase_reference text not null unique/);
+    assert.match(migration, /num_nonnulls\(organization_id, user_id\) = 1/);
+    assert.match(access, /purchaseReference: `stripe-checkout:/);
+  }],
+  ["entitlement window is activation timestamp plus configured days", () => {
+    assert.match(migration, /v_expires_at := p_starts_at[\s\S]*make_interval\(hours => p_entitlement_window_days \* 24\)/);
+    assert.match(migration, /now\(\) < v_starts_at or now\(\) >= v_expires_at/);
+  }],
+  ["no calendar-month refill logic remains", () => {
+    const entitlementSources = `${usage}\n${migration}\n${endpoint}`;
+    assert.doesNotMatch(entitlementSources, /America\/New_York|quota_month|MONTHLY_LIMIT|currentAssessmentMonth|monthly_quota/);
+  }],
+  ["purchase completion grants entitlement", () => assert.match(webhook, /handleCompletedCheckout[\s\S]*grantAssessmentGenerationEntitlement/)],
+  ["subscription changes do not grant entitlement", () => {
+    const subscriptionHandler = webhook.slice(webhook.indexOf("async function handleSubscriptionChange"));
+    assert.doesNotMatch(subscriptionHandler, /grantAssessmentGenerationEntitlement/);
+  }],
   ["quota reserves before completion", () => assert.match(endpoint, /reserveAssessmentGeneration[\s\S]*generateAssessmentClaims[\s\S]*completeAssessmentGeneration/)],
+  ["privacy and safety gates run before reservation", () => {
+    const reserveIndex = endpoint.lastIndexOf("await reserveAssessmentGeneration");
+    assert.ok(endpoint.lastIndexOf("scanAssessmentFacts(") < reserveIndex);
+    assert.ok(endpoint.lastIndexOf("detectSafetyConflicts(") < reserveIndex);
+  }],
+  ["all output validation finishes before credit completion", () => {
+    const completeIndex = endpoint.lastIndexOf("await completeAssessmentGeneration");
+    assert.ok(endpoint.lastIndexOf("validateClaims(") < completeIndex);
+    assert.ok(endpoint.lastIndexOf("scanGeneratedClaims(") < completeIndex);
+    assert.ok(endpoint.lastIndexOf("renderAssessmentFromClaims(") < completeIndex);
+  }],
   ["failed generation releases its reservation", () => assert.match(endpoint, /finally[\s\S]*releaseAssessmentGeneration/)],
   ["database ledger contains no clinical payload columns", () => {
-    const tableDefinition = migration.slice(
-      migration.indexOf("create table"),
-      migration.indexOf("create index")
-    );
-    assert.doesNotMatch(tableDefinition, /assessment_text|\bfacts\b|payload|participant|clinical_content/);
+    const tableDefinitions = [...migration.matchAll(/create table[\s\S]*?\n\);/g)]
+      .map((match) => match[0])
+      .join("\n");
+    assert.doesNotMatch(tableDefinitions, /assessment_text|\bfacts\b|payload|participant|clinical_content/);
   }],
   ["database ledger supports stale reservation cleanup", () => assert.match(migration, /status = 'reserved'[\s\S]*reserved_at < now\(\)/)],
-  ["only completed ledger rows count toward monthly use", () => assert.match(migration, /status = 'completed'/)],
+  ["only completed ledger rows consume entitlement", () => assert.match(migration, /where entitlement_id = [^\n]+[\s\S]*status = 'completed'/)],
   ["quota RPCs are service-role only", () => assert.match(migration, /grant execute[\s\S]*service_role/)],
+  ["purchase UI states the included generation entitlement", () => {
+    assert.match(marketing, /INITIAL_ASSESSMENT_ENTITLEMENT_LABEL/);
+    assert.match(policy, /AI-Assisted Psychosocial Assessment Generations Included/);
+  }],
   ["workflow uses volatile React state only", () => assert.doesNotMatch(workflow, /localStorage|sessionStorage|indexedDB|supabase.*from\(/i)],
   ["workflow never sends generated or edited assessment text", () => {
     const requestBlock = workflow.slice(workflow.indexOf("const requestBody"), workflow.indexOf("const controller"));

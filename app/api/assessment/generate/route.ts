@@ -101,25 +101,26 @@ export async function POST(request: Request) {
   let reservationId: string | null = null;
   let completed = false;
   try {
-    const reservation = await reserveAssessmentGeneration(access.userId);
+    const reservation = await reserveAssessmentGeneration(
+      access.userId,
+      access.entitlementActivation
+    );
     if (!reservation.allowed || !reservation.reservationId) {
+      const denial = reservationDenial(reservation.reason);
       return NextResponse.json(
         {
-          error:
-            reservation.reason === "rapid_limit"
-              ? "Please wait before trying another assessment generation."
-              : "The monthly assessment-generation quota has been reached.",
+          error: denial.error,
           code: reservation.reason,
           usage: {
-            monthlyLimit: reservation.monthlyLimit,
-            successfulGenerationsThisMonth:
-              reservation.successfulGenerationsThisMonth,
-            remainingSuccessfulGenerations:
-              reservation.remainingSuccessfulGenerations
+            entitlementExpiresAt: reservation.entitlementExpiresAt,
+            entitlementStartsAt: reservation.entitlementStartsAt,
+            includedQuantity: reservation.includedQuantity,
+            remainingGenerations: reservation.remainingGenerations,
+            successfulGenerationsUsed: reservation.successfulGenerationsUsed
           }
         },
         {
-          status: 429,
+          status: denial.status,
           headers: {
             ...NO_STORE_HEADERS,
             ...(reservation.reason === "rapid_limit" ? { "Retry-After": "60" } : {})
@@ -208,6 +209,31 @@ export async function POST(request: Request) {
       await releaseAssessmentGeneration(access.userId, reservationId).catch(() => undefined);
     }
   }
+}
+
+function reservationDenial(reason: string) {
+  if (reason === "rapid_limit") {
+    return {
+      error: "Please wait before trying another assessment generation.",
+      status: 429
+    };
+  }
+  if (reason === "entitlement_exhausted") {
+    return {
+      error: "The included assessment-generation credits have been used.",
+      status: 429
+    };
+  }
+  if (reason === "entitlement_inactive") {
+    return {
+      error: "The assessment-generation entitlement window is not active.",
+      status: 403
+    };
+  }
+  return {
+    error: "A qualifying Psychosocial purchase activation is required.",
+    status: 403
+  };
 }
 
 export function GET() {

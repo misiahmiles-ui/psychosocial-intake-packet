@@ -23,6 +23,10 @@ import {
   scanSerializedAssessmentRequest,
   validateClaims
 } from "@/lib/assessment";
+import {
+  INITIAL_ASSESSMENT_ENTITLEMENT_DETAIL,
+  INITIAL_ASSESSMENT_ENTITLEMENT_LABEL
+} from "@/lib/assessmentEntitlementPolicy";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import type {
   AcceptedAssessment,
@@ -263,7 +267,7 @@ export function AssessmentWorkflow({
         </div>
         {usage ? (
           <div className="rounded-lg border border-[#cde7df] bg-mint px-4 py-3 text-sm font-semibold text-[#334642]">
-            {usage.successfulGenerationsThisMonth} of {usage.monthlyLimit} successful generations used this month · {usage.remainingSuccessfulGenerations} remaining
+            {usage.successfulGenerationsUsed} of {usage.includedQuantity} successful generations used · {usage.remainingGenerations} remaining · entitlement window ends {formatEntitlementEnd(usage.entitlementExpiresAt)}
           </div>
         ) : null}
       </div>
@@ -279,7 +283,7 @@ export function AssessmentWorkflow({
             <WandSparkles className="h-4 w-4" aria-hidden="true" />
             Generate Psychosocial Assessment
           </button>
-          <p className="mt-3 text-sm leading-6 text-[#52645f]">Generation is subject to the centrally configured non-rollover monthly allowance. Only a successful, validated assessment counts.</p>
+          <p className="mt-3 text-sm leading-6 text-[#52645f]">{INITIAL_ASSESSMENT_ENTITLEMENT_LABEL}. {INITIAL_ASSESSMENT_ENTITLEMENT_DETAIL} Only a successful, validated assessment counts.</p>
         </div>
       ) : null}
 
@@ -493,8 +497,19 @@ function isValidatedResponse(value: unknown): value is ValidatedAssessmentRespon
     typeof result.assessmentText === "string" &&
     result.validation &&
     result.usage &&
-    Number.isInteger(result.usage.monthlyLimit) &&
-    Number.isInteger(result.usage.successfulGenerationsThisMonth) &&
-    Number.isInteger(result.usage.remainingSuccessfulGenerations)
+    Number.isInteger(result.usage.includedQuantity) &&
+    Number.isInteger(result.usage.successfulGenerationsUsed) &&
+    Number.isInteger(result.usage.remainingGenerations) &&
+    typeof result.usage.entitlementStartsAt === "string" &&
+    typeof result.usage.entitlementExpiresAt === "string"
   );
+}
+
+function formatEntitlementEnd(value: string) {
+  const timestamp = new Date(value);
+  if (Number.isNaN(timestamp.getTime())) return "at the recorded expiration time";
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(timestamp);
 }

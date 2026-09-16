@@ -1,21 +1,52 @@
 import "server-only";
 
+import {
+  DEFAULT_ASSESSMENT_ENTITLEMENT_WINDOW_DAYS,
+  DEFAULT_ASSESSMENT_INCLUDED_QUANTITY
+} from "@/lib/assessmentEntitlementPolicy";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 
 export type AssessmentUsage = {
-  monthlyLimit: number;
-  successfulGenerationsThisMonth: number;
-  remainingSuccessfulGenerations: number;
+  includedQuantity: number;
+  successfulGenerationsUsed: number;
+  remainingGenerations: number;
+  entitlementStartsAt: string;
+  entitlementExpiresAt: string;
 };
 
-type ReservationResult = AssessmentUsage & {
+export type AssessmentEntitlementActivation =
+  | {
+      kind: "organization";
+      organizationId: string;
+      purchaseReference: string;
+      startsAt: string;
+    }
+  | {
+      kind: "user";
+      userId: string;
+      purchaseReference: string;
+      startsAt: string;
+    };
+
+type ReservationResult = {
   allowed: boolean;
-  reason: "allowed" | "monthly_quota" | "rapid_limit";
+  reason:
+    | "allowed"
+    | "entitlement_exhausted"
+    | "entitlement_inactive"
+    | "entitlement_unavailable"
+    | "rapid_limit";
   reservationId: string | null;
+  includedQuantity: number;
+  successfulGenerationsUsed: number;
+  remainingGenerations: number;
+  entitlementStartsAt: string | null;
+  entitlementExpiresAt: string | null;
 };
 
 export type AssessmentGenerationConfig = {
-  monthlyLimit: number;
+  includedQuantity: number;
+  entitlementWindowDays: number;
   rapidLimit: number;
   rapidWindowSeconds: number;
   reservationTtlSeconds: number;
@@ -38,11 +69,17 @@ function integerEnvironmentValue(
 
 export function getAssessmentGenerationConfig(): AssessmentGenerationConfig {
   return {
-    monthlyLimit: integerEnvironmentValue(
-      "PSYCHOSOCIAL_ASSESSMENT_MONTHLY_LIMIT",
-      30,
+    includedQuantity: integerEnvironmentValue(
+      "PSYCHOSOCIAL_ASSESSMENT_INCLUDED_QUANTITY",
+      DEFAULT_ASSESSMENT_INCLUDED_QUANTITY,
       1,
       1000
+    ),
+    entitlementWindowDays: integerEnvironmentValue(
+      "PSYCHOSOCIAL_ASSESSMENT_ENTITLEMENT_WINDOW_DAYS",
+      DEFAULT_ASSESSMENT_ENTITLEMENT_WINDOW_DAYS,
+      1,
+      365
     ),
     rapidLimit: integerEnvironmentValue(
       "PSYCHOSOCIAL_ASSESSMENT_RAPID_LIMIT",
@@ -71,28 +108,43 @@ export function getAssessmentGenerationConfig(): AssessmentGenerationConfig {
   };
 }
 
-export function currentAssessmentMonth(now = new Date()) {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    month: "2-digit",
-    timeZone: "America/New_York",
-    year: "numeric"
-  }).formatToParts(now);
-  const year = parts.find((part) => part.type === "year")?.value;
-  const month = parts.find((part) => part.type === "month")?.value;
-  if (!year || !month) throw new Error("The assessment quota month could not be resolved.");
-  return `${year}-${month}`;
+export async function grantAssessmentGenerationEntitlement(
+  activation: AssessmentEntitlementActivation
+) {
+  const config = getAssessmentGenerationConfig();
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin.rpc(
+    "psychosocial_grant_assessment_generation_entitlement",
+    {
+      p_entitlement_window_days: config.entitlementWindowDays,
+      p_included_quantity: config.includedQuantity,
+      p_organization_id:
+        activation.kind === "organization" ? activation.organizationId : null,
+      p_purchase_reference: activation.purchaseReference,
+      p_starts_at: activation.startsAt,
+      p_user_id: activation.kind === "user" ? activation.userId : null
+    }
+  );
+
+  if (error || typeof data !== "string") {
+    throw new Error("Assessment generation entitlement could not be granted.");
+  }
+  return data;
 }
 
 export async function reserveAssessmentGeneration(
-  userId: string
+  userId: string,
+  activation: AssessmentEntitlementActivation | null
 ): Promise<ReservationResult> {
+  if (!activation) return unavailableReservation();
+
   const config = getAssessmentGenerationConfig();
+  const entitlementId = await grantAssessmentGenerationEntitlement(activation);
   const admin = createSupabaseAdminClient();
   const { data, error } = await admin.rpc(
     "psychosocial_reserve_assessment_generation",
     {
-      p_month: currentAssessmentMonth(),
-      p_monthly_limit: config.monthlyLimit,
+      p_entitlement_id: entitlementId,
       p_rapid_limit: config.rapidLimit,
       p_rapid_window_seconds: config.rapidWindowSeconds,
       p_reservation_ttl_seconds: config.reservationTtlSeconds,
@@ -100,7 +152,7 @@ export async function reserveAssessmentGeneration(
     }
   );
   if (error || !isReservationResult(data)) {
-    throw new Error("Assessment generation quota could not be reserved.");
+    throw new Error("Assessment generation entitlement could not be reserved.");
   }
   return data;
 }
@@ -110,17 +162,15 @@ export async function completeAssessmentGeneration(
   reservationId: string
 ): Promise<AssessmentUsage> {
   const admin = createSupabaseAdminClient();
-  const config = getAssessmentGenerationConfig();
   const { data, error } = await admin.rpc(
     "psychosocial_complete_assessment_generation",
     {
-      p_monthly_limit: config.monthlyLimit,
       p_reservation_id: reservationId,
       p_user_id: userId
     }
   );
   if (error || !isUsage(data)) {
-    throw new Error("Assessment generation quota could not be finalized.");
+    throw new Error("Assessment generation entitlement could not be finalized.");
   }
   return data;
 }
@@ -134,25 +184,55 @@ export async function releaseAssessmentGeneration(
     p_reservation_id: reservationId,
     p_user_id: userId
   });
-  if (error) throw new Error("Assessment generation quota could not be released.");
+  if (error) {
+    throw new Error("Assessment generation entitlement could not be released.");
+  }
 }
 
 function isUsage(value: unknown): value is AssessmentUsage {
   if (!value || typeof value !== "object") return false;
   const item = value as Record<string, unknown>;
   return (
-    Number.isInteger(item.monthlyLimit) &&
-    Number.isInteger(item.successfulGenerationsThisMonth) &&
-    Number.isInteger(item.remainingSuccessfulGenerations)
+    Number.isInteger(item.includedQuantity) &&
+    Number.isInteger(item.successfulGenerationsUsed) &&
+    Number.isInteger(item.remainingGenerations) &&
+    typeof item.entitlementStartsAt === "string" &&
+    typeof item.entitlementExpiresAt === "string"
   );
 }
 
 function isReservationResult(value: unknown): value is ReservationResult {
-  if (!isUsage(value)) return false;
-  const item = value as unknown as Record<string, unknown>;
+  if (!value || typeof value !== "object") return false;
+  const item = value as Record<string, unknown>;
   return (
     typeof item.allowed === "boolean" &&
-    ["allowed", "monthly_quota", "rapid_limit"].includes(String(item.reason)) &&
-    (typeof item.reservationId === "string" || item.reservationId === null)
+    [
+      "allowed",
+      "entitlement_exhausted",
+      "entitlement_inactive",
+      "entitlement_unavailable",
+      "rapid_limit"
+    ].includes(String(item.reason)) &&
+    (typeof item.reservationId === "string" || item.reservationId === null) &&
+    Number.isInteger(item.includedQuantity) &&
+    Number.isInteger(item.successfulGenerationsUsed) &&
+    Number.isInteger(item.remainingGenerations) &&
+    (typeof item.entitlementStartsAt === "string" ||
+      item.entitlementStartsAt === null) &&
+    (typeof item.entitlementExpiresAt === "string" ||
+      item.entitlementExpiresAt === null)
   );
+}
+
+function unavailableReservation(): ReservationResult {
+  return {
+    allowed: false,
+    reason: "entitlement_unavailable",
+    reservationId: null,
+    includedQuantity: 0,
+    successfulGenerationsUsed: 0,
+    remainingGenerations: 0,
+    entitlementStartsAt: null,
+    entitlementExpiresAt: null
+  };
 }

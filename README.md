@@ -24,7 +24,7 @@ Created by Marvin Miles, LSW.
 
 The intake and PDF workflow does not persist assessment information inside the app, browser storage, Supabase, Netlify forms, analytics, logs, or a clinical-record database. Entered information remains active only in the current browser tab until the user downloads an Editable Draft PDF, exports a final PDF, prints, clears the form, refreshes, closes the tab, or navigates away.
 
-The optional assessment generator is the one exception to a fully local workflow: after a clinician completes the PHI Review Gate, the app sends only the temporary, de-identified, structured fact set to its server-side generation endpoint and then to the configured OpenAI project. The full intake packet, participant identity fields, generated narrative, clinician edits, and final PDF are not stored in the quota ledger. The generated assessment returns to volatile browser state for clinician review and local final-PDF export.
+The optional assessment generator is the one exception to a fully local workflow: after a clinician completes the PHI Review Gate, the app sends only the temporary, de-identified, structured fact set to its server-side generation endpoint and then to the configured OpenAI project. The full intake packet, participant identity fields, generated narrative, clinician edits, and final PDF are not stored in the entitlement ledger. The generated assessment returns to volatile browser state for clinician review and local final-PDF export.
 
 Supabase is used only for buyer account login and paid access status. Stripe is used only for payment checkout. Do not add client/member/participant assessment fields, uploaded logos, completed packets, draft packets, or PHI to Supabase, Stripe metadata, Netlify forms, analytics, logs, or any backend.
 
@@ -45,22 +45,24 @@ The assessment generator follows the existing LeanMaster Integrated Note Engine 
 
 `store: false` is an API request setting, not a legal, HIPAA, Business Associate Agreement, or zero-retention guarantee. The product owner and each agency must independently review the configured OpenAI account/project, data controls, contracts, hosting, and policies before production use.
 
-### Generation quota
+### Generation entitlement
 
-The initial rule is 30 successfully generated and validated Psychosocial Assessments per authenticated user per America/New_York calendar month, with no rollover. The default lives in `lib/assessmentUsage.ts` and can be overridden centrally with `PSYCHOSOCIAL_ASSESSMENT_MONTHLY_LIMIT`; it is not repeated throughout the UI.
+A qualifying Psychosocial Intake purchase/activation grants **30 AI-Assisted Psychosocial Assessment Generations Included**. This is a one-time pool attached to that purchase entitlement, not a recurring monthly subscription benefit. The entitlement window starts at the recorded purchase/activation timestamp and ends exactly 30 days later. Unused credits expire at the end of that window, do not roll over, and are not refilled at a calendar-month boundary or by a hosted-access subscription renewal. For shared-suite accounts, authorized Psychosocial users at the facility consume the same purchase-scoped pool; a legacy single-user activation uses a purchase-scoped pool for that user.
 
-Only a completed, validated result consumes one generation. PHI blocks, safety-conflict blocks, provider failures, timeouts, aborted requests, and validation failures release the reservation and do not consume monthly quota. A successful clinician-requested regeneration is a new successful generation and consumes one more. Failed attempts remain briefly as account-level, nonclinical rate-limit events so repeated failures cannot bypass abuse controls; they are not counted as successful monthly usage.
+The default quantity and window live centrally in `lib/assessmentEntitlementPolicy.ts` and `lib/assessmentUsage.ts`. Server enforcement can be configured with `PSYCHOSOCIAL_ASSESSMENT_INCLUDED_QUANTITY` (default `30`) and `PSYCHOSOCIAL_ASSESSMENT_ENTITLEMENT_WINDOW_DAYS` (default `30`). Future additional-generation packs are intentionally outside this implementation, and this change adds no Stripe product or price.
+
+Only a completed result that passes response-schema, output-PHI, provenance/source-grounding, and protected clinical/safety validation consumes one credit. PHI Review Gate activity, blocked PHI transmission, unresolved safety conflicts, provider/API failures, timeouts, aborted requests, schema failures, output-PHI failures, provenance failures, protected clinical/safety validation failures, and every other failed attempt release the reservation and consume zero credits. A successful clinician-requested regeneration generates another validated assessment and consumes one additional credit. Failed attempts remain briefly as account-level, nonclinical rate-limit events so repeated failures cannot bypass abuse controls; they never count as successful entitlement usage.
 
 ### Owner setup for Netlify and Supabase
 
 Do not deploy this feature until the owner has reviewed the branch and completed these steps:
 
 1. Open the existing Supabase project used by this Psychosocial Intake application.
-2. In **SQL Editor**, create a new query, paste `supabase/migrations/20260915_psychosocial_assessment_quota.sql`, and run it once.
-3. In **Table Editor**, verify `psychosocial_assessment_generation_events` contains account/quota metadata only (`id`, `user_id`, `quota_month`, `status`, `reserved_at`, and `completed_at`) and has row-level security enabled.
+2. Confirm the shared-suite schema migration is present, then in **SQL Editor** create a new query, paste `supabase/migrations/20260915_psychosocial_assessment_quota.sql`, and run it once.
+3. In **Table Editor**, verify `psychosocial_assessment_generation_entitlements` contains only purchase/account entitlement metadata (`organization_id` or `user_id`, purchase reference, included quantity, start, and expiration) and `psychosocial_assessment_generation_events` contains only reservation/completion metadata. Confirm row-level security is enabled on both. Neither table may contain participant clinical content or PHI.
 4. In the Netlify site for this application, open **Site configuration → Environment variables**.
 5. Add `OPENAI_API_KEY` as a server-only value. It may be a key from the same approved OpenAI account/project/billing source used by LeanMaster, but it must be configured independently for this Netlify site. Never use a `NEXT_PUBLIC_` prefix.
-6. Add or confirm `OPENAI_MODEL`, `PSYCHOSOCIAL_ASSESSMENT_MONTHLY_LIMIT=30`, `PSYCHOSOCIAL_ASSESSMENT_RAPID_LIMIT=5`, `PSYCHOSOCIAL_ASSESSMENT_RAPID_WINDOW_SECONDS=60`, `PSYCHOSOCIAL_ASSESSMENT_RESERVATION_TTL_SECONDS=600`, and `PSYCHOSOCIAL_ASSESSMENT_TIMEOUT_MS=75000`.
+6. Add or confirm `OPENAI_MODEL`, `PSYCHOSOCIAL_ASSESSMENT_INCLUDED_QUANTITY=30`, `PSYCHOSOCIAL_ASSESSMENT_ENTITLEMENT_WINDOW_DAYS=30`, `PSYCHOSOCIAL_ASSESSMENT_RAPID_LIMIT=5`, `PSYCHOSOCIAL_ASSESSMENT_RAPID_WINDOW_SECONDS=60`, `PSYCHOSOCIAL_ASSESSMENT_RESERVATION_TTL_SECONDS=600`, and `PSYCHOSOCIAL_ASSESSMENT_TIMEOUT_MS=75000`.
 7. Scope the variables to the intended Netlify contexts, save them, and redeploy only after review. Do not copy LeanMaster's `.env` file or source code into this repository.
 
 The API key never belongs in source code, browser code, a public environment variable, Supabase tables, Stripe metadata, or logs. Applying the migration and adding environment variables are manual owner actions; this branch does not change the live database or deploy the site.
@@ -75,7 +77,7 @@ pnpm build
 pnpm run verify:assessment-pdf
 ```
 
-A live provider smoke test must be performed only after the separate server environment and quota migration are present. Use fictitious data, verify a successful result increments completed usage once, and verify a forced provider failure does not increment completed monthly usage.
+A live provider smoke test must be performed only after the separate server environment and entitlement migration are present. Use fictitious data; verify a successful validated result increments completed usage once, a successful regeneration increments it once more, a forced failure does not increment usage, and subscription/calendar changes do not grant or refill credits.
 
 ## Editable draft PDF behavior
 

@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { AssessmentEntitlementActivation } from "@/lib/assessmentUsage";
 import { hasCurrentLegalAcceptance } from "@/lib/legal/acceptance";
 import { metadataHasAccess } from "@/lib/supabase/accessMetadata";
 import { resolveOwnerAuthorization } from "@/lib/supabase/ownerRole";
@@ -14,12 +15,18 @@ import {
 } from "@/lib/supabase/server";
 
 type AccessResult =
-  | { authorized: true; userId: string }
+  | {
+      authorized: true;
+      entitlementActivation: AssessmentEntitlementActivation | null;
+      userId: string;
+    }
   | { authorized: false; error: string; status: number };
 
 type ProfileAccessRow = {
   account_role: string | null;
+  access_granted_at: string | null;
   has_access: boolean;
+  stripe_checkout_session_id: string | null;
 };
 
 export function requestIsSameOrigin(request: Request) {
@@ -66,7 +73,9 @@ export async function authorizeAssessmentGeneration(
 
   const { data: profile, error: profileError } = await admin
     .from("profiles")
-    .select("account_role,has_access")
+    .select(
+      "account_role,access_granted_at,has_access,stripe_checkout_session_id"
+    )
     .eq("id", user.id)
     .maybeSingle<ProfileAccessRow>();
   if (profileError) {
@@ -82,7 +91,13 @@ export async function authorizeAssessmentGeneration(
     appMetadata,
     profileRole: profile?.account_role
   });
-  if (owner.isOwner) return { authorized: true, userId: user.id };
+  if (owner.isOwner) {
+    return {
+      authorized: true,
+      entitlementActivation: null,
+      userId: user.id
+    };
+  }
 
   try {
     if (!(await hasCurrentLegalAcceptance(admin, user.id))) {
@@ -102,7 +117,17 @@ export async function authorizeAssessmentGeneration(
           status: 403
         };
       }
-      return { authorized: true, userId: user.id };
+      return {
+        authorized: true,
+        entitlementActivation: sharedAccess.purchaseActivation
+          ? {
+              kind: "organization",
+              organizationId: sharedAccess.organizationId as string,
+              ...sharedAccess.purchaseActivation
+            }
+          : null,
+        userId: user.id
+      };
     }
   } catch {
     return {
@@ -120,5 +145,27 @@ export async function authorizeAssessmentGeneration(
     };
   }
 
-  return { authorized: true, userId: user.id };
+  const checkoutSessionId =
+    profile?.stripe_checkout_session_id ??
+    metadataString(appMetadata.stripe_checkout_session_id);
+  const accessGrantedAt =
+    profile?.access_granted_at ?? metadataString(appMetadata.access_granted_at);
+
+  return {
+    authorized: true,
+    entitlementActivation:
+      checkoutSessionId && accessGrantedAt
+        ? {
+            kind: "user",
+            purchaseReference: `stripe-checkout:${checkoutSessionId}`,
+            startsAt: accessGrantedAt,
+            userId: user.id
+          }
+        : null,
+    userId: user.id
+  };
+}
+
+function metadataString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value : null;
 }
