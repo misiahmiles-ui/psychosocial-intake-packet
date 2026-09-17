@@ -22,10 +22,10 @@ export default function SignupPage() {
           <p className="mt-4 leading-7 text-[#52645f]">
             Create the account first, then complete the $487 upfront access
             checkout with the $19/month hosted access and maintenance
-            subscription. The original purchase includes 30 AI-Assisted
-            Psychosocial Assessment Generations for 30 days; then the separate
-            $10/month assessment-generation subscription begins with 30
-            successful generations per paid Stripe billing cycle. After payment
+            subscription. Psychosocial Assessment Included: create up to 25
+            professional Psychosocial Assessments per monthly billing cycle.
+            Built-in fact-based creation and optional AI-enhanced clinical writing
+            are included at no additional charge. After payment
             is confirmed, this account can open the hosted workflow.
           </p>
           <Link

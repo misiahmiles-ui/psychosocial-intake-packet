@@ -219,7 +219,7 @@ export function AdultDayIntakeProMarketing() {
               <p className="mt-4 text-sm leading-6 text-[#435665]">Includes one named Psychosocial workflow seat.</p>
               <p className="mt-2 text-sm font-bold leading-6 text-[#45613a]">{INITIAL_ASSESSMENT_ENTITLEMENT_LABEL}.</p>
               <p className="mt-1 text-sm leading-6 text-[#435665]">{INITIAL_ASSESSMENT_ENTITLEMENT_DETAIL}</p>
-              <p className="mt-2 text-sm font-semibold leading-6 text-[#435665]">Then {RECURRING_ASSESSMENT_ENTITLEMENT_LABEL}, non-rollover. Authorized facility users share one facility pool.</p>
+              <p className="mt-2 text-sm font-semibold leading-6 text-[#435665]">{RECURRING_ASSESSMENT_ENTITLEMENT_LABEL}. Authorized facility users share one facility pool.</p>
               <p className="mt-2 text-sm font-semibold text-[#435665]">Additional Psychosocial seats: $9/month each.</p>
               <Link href="/signup" className="mt-5 inline-flex font-bold text-[#174f80]">
                 Request Psychosocial Access <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />

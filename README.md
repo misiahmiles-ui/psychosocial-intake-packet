@@ -34,12 +34,12 @@ This is a privacy-conscious/no-retention workflow design, not a HIPAA compliance
 
 ## Psychosocial assessment generation
 
-The assessment generator follows the existing LeanMaster Integrated Note Engine integration pattern without importing LeanMaster code or depending on its repository at runtime:
+The active assessment generator creates a deterministic draft from reviewed intake facts. Optional AI composes the clinician-facing clinical paragraphs by choosing, grouping, and ordering source-bound professional phrasings supplied from those same reviewed facts. The AI returns the actual paragraph text and source IDs. Server and browser validate every sentence against the exact approved options before display; valid AI wording is retained. One deterministic repair pass replaces unsupported clauses from their cited facts. If the result is still unsafe, contains output PHI, or retains no valid AI wording, the original built-in draft is used. Arbitrary free-form paraphrases cannot be deterministically certified and are not accepted. Legacy lexical validation and second-model review code is disconnected from the active workflow.
 
 - OpenAI access is server-side only through the Responses API.
 - `OPENAI_API_KEY` and `OPENAI_MODEL` are read only from this application's server environment.
 - Strict JSON Schema structured output is validated again against the transmitted source facts before any result is accepted.
-- Requests use an abortable timeout, one bounded retry, sanitized errors, `store: false`, and no request/response-body logging.
+- The optional active AI request is one abortable attempt with sanitized errors, `store: false`, and no request/response-body logging.
 - OpenAI instructions and the untrusted structured fact payload are kept separate.
 - A final exact-payload PHI scan runs immediately before the outbound request, followed by source-grounding and output-PHI validation after generation.
 
@@ -47,25 +47,27 @@ The assessment generator follows the existing LeanMaster Integrated Note Engine 
 
 ### Generation entitlement
 
-A qualifying Psychosocial Intake purchase/activation grants **30 AI-Assisted Psychosocial Assessment Generations Included**. This one-time pool begins at the recorded activation timestamp, ends exactly 30 days later, and does not roll over. After that included period, the application creates a separate **AI-Assisted Psychosocial Assessment Generations** Stripe subscription at **$10/month**. Each successfully paid Stripe billing cycle grants a new non-rollover pool of 30 successful generations for that actual billing-cycle window. It is never a calendar-month reset. For shared-suite accounts, authorized Psychosocial users at the facility consume the same facility purchase/billing-cycle pool; a legacy single-user activation uses that individual account's pool.
+A qualifying Psychosocial Intake purchase includes **25 completed Psychosocial Assessments per monthly billing cycle**. The existing upfront amount and $19/month continuation are unchanged. The checkout activation starts the first pool; each paid cycle of the existing hosted-access subscription grants the next pool. AI enhancement is included in the same use. For shared-suite accounts, authorized Psychosocial users at the facility share the pool.
 
-The default quantity and window live centrally in `lib/assessmentEntitlementPolicy.ts` and `lib/assessmentUsage.ts`. Server enforcement can be configured with `PSYCHOSOCIAL_ASSESSMENT_INCLUDED_QUANTITY` (default `30`), `PSYCHOSOCIAL_ASSESSMENT_ENTITLEMENT_WINDOW_DAYS` (default `30`), and `PSYCHOSOCIAL_ASSESSMENT_RECURRING_INCLUDED_QUANTITY` (default `30`). The recurring Stripe Price ID is server-only in `STRIPE_PSYCHOSOCIAL_ASSESSMENT_GENERATIONS_MONTHLY_PRICE_ID`. No additional 30/40/50-generation packs are implemented.
+The quantity is fixed at 25 in `lib/assessmentEntitlementPolicy.ts`. The existing quota ledger records completed assessment workflows and billing-cycle windows; its older database names are internal only.
 
-Only a completed result that passes response-schema, output-PHI, provenance/source-grounding, and protected clinical/safety validation consumes one credit. PHI Review Gate activity, blocked PHI transmission, unresolved safety conflicts, provider/API failures, timeouts, aborted requests, schema failures, output-PHI failures, provenance failures, protected clinical/safety validation failures, and every other failed attempt release the reservation and consume zero credits. A successful clinician-requested regeneration generates another validated assessment and consumes one additional credit. Failed attempts remain briefly as account-level, nonclinical rate-limit events so repeated failures cannot bypass abuse controls; they never count as successful entitlement usage.
+Only a successful workflow returning a usable assessment consumes one assessment use. Draft building, AI enhancement, validation, repair, and fallback do not consume separate uses. Failed or canceled workflows release their reservation. Product Owner access remains unlimited.
 
 ### Owner setup for Netlify and Supabase
 
 Do not deploy this feature until the owner has reviewed the branch and completed these steps:
 
 1. Open the existing Supabase project used by this Psychosocial Intake application.
-2. Confirm the shared-suite schema migration is present, then in **SQL Editor** create a new query, paste `supabase/migrations/20260915_psychosocial_assessment_quota.sql`, and run it once.
+2. Confirm the shared-suite schema migration is present. Apply `supabase/migrations/20260915_psychosocial_assessment_quota.sql`, then `supabase/migrations/20260917_included_psychosocial_assessments.sql` in order during the approved deployment. The latter caps any existing 30-use pools at 25.
 3. In **Table Editor**, verify `psychosocial_assessment_generation_entitlements` contains only purchase, Stripe subscription/invoice, account-scope, included quantity, and billing-window metadata; `psychosocial_assessment_generation_events` contains only reservation/completion metadata. Confirm row-level security is enabled on both. Neither table may contain participant clinical content or PHI.
 4. In the Netlify site for this application, open **Site configuration → Environment variables**.
 5. Add `OPENAI_API_KEY` as a server-only value. It may be a key from the same approved OpenAI account/project/billing source used by LeanMaster, but it must be configured independently for this Netlify site. Never use a `NEXT_PUBLIC_` prefix.
-6. Add or confirm `OPENAI_MODEL`, `PSYCHOSOCIAL_ASSESSMENT_INCLUDED_QUANTITY=30`, `PSYCHOSOCIAL_ASSESSMENT_ENTITLEMENT_WINDOW_DAYS=30`, `PSYCHOSOCIAL_ASSESSMENT_RECURRING_INCLUDED_QUANTITY=30`, `PSYCHOSOCIAL_ASSESSMENT_RAPID_LIMIT=5`, `PSYCHOSOCIAL_ASSESSMENT_RAPID_WINDOW_SECONDS=60`, `PSYCHOSOCIAL_ASSESSMENT_RESERVATION_TTL_SECONDS=600`, `PSYCHOSOCIAL_ASSESSMENT_TIMEOUT_MS=75000`, and the server-only `STRIPE_PSYCHOSOCIAL_ASSESSMENT_GENERATIONS_MONTHLY_PRICE_ID`.
+6. Add or confirm `OPENAI_MODEL` and the existing assessment rate-limit and timeout settings. The assessment quantity is fixed in code. No separate assessment Stripe Price ID is required.
 7. Scope the variables to the intended Netlify contexts, save them, and redeploy only after review. Do not copy LeanMaster's `.env` file or source code into this repository.
 
 The API key never belongs in source code, browser code, a public environment variable, Supabase tables, Stripe metadata, or logs. Applying the migration and adding environment variables are manual owner actions; this branch does not change the live database or deploy the site.
+
+Existing separate assessment add-on subscriptions, if any were previously created in Stripe, require an approved Stripe cancellation and billing review before deployment. This offline code change stops creating new add-ons but does not alter live Stripe subscriptions.
 
 Run these checks before approving deployment:
 
@@ -77,7 +79,7 @@ pnpm build
 pnpm run verify:assessment-pdf
 ```
 
-A live provider smoke test must be performed only after the separate server environment and entitlement migration are present. Use fictitious data; verify a successful validated result increments completed usage once, a successful regeneration increments it once more, a forced failure does not increment usage, the included pool ends after 30 exact days, and a paid assessment-generation Stripe invoice creates exactly one new 30-generation billing-cycle pool.
+Any live provider verification requires separate owner approval. Use fictitious data and verify that a usable assessment increments usage once, provider failure still returns the built-in assessment, and a paid hosted-access invoice grants one 25-assessment billing-cycle pool.
 
 ## Editable draft PDF behavior
 
@@ -149,7 +151,7 @@ This project is set up for the simple paid-access model:
 
 1. Netlify hosts the web app.
 2. Supabase stores buyer accounts and access status only.
-3. Stripe collects the $487 upfront payment and starts the $19/month hosted access and maintenance subscription. The webhook also creates the separate $10/month assessment-generation subscription with a 30-day trial that matches the included generation period.
+3. Stripe collects the existing $487 upfront payment and starts the existing $19/month hosted access and maintenance subscription, which includes 25 Psychosocial Assessments per billing cycle.
 4. Stripe sends webhooks back to the app.
 5. The webhook marks the buyer profile as `has_access = true` while the subscription is active.
 6. Subscription update/cancellation webhooks update access when Stripe reports the subscription is no longer active.
@@ -243,7 +245,6 @@ STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
 STRIPE_STANDARD_ACCESS_UPFRONT_PRICE_ID=
 STRIPE_STANDARD_ACCESS_MONTHLY_PRICE_ID=
-STRIPE_PSYCHOSOCIAL_ASSESSMENT_GENERATIONS_MONTHLY_PRICE_ID=
 STANDARD_ACCESS_UPFRONT_PRICE_CENTS=48700
 STANDARD_ACCESS_MONTHLY_PRICE_CENTS=1900
 ```

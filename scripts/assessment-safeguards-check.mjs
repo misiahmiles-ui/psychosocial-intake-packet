@@ -95,6 +95,54 @@ function findingFor(value) {
   return assessment.scanAssessmentFacts([fact({ normalizedValue: value })]);
 }
 
+test("temporal inference matches complete tokens, never substrings in ordinary words", () => {
+  for (const value of ["Visits several times per week.", "Never reported.", "Every activity is optional.", "Priorities include transportation.", "Enjoys pasta.", "Uses a transformer.", "Time is unknown.", "Nowhere specified.", "Recurrently attends.", "Currentness unspecified.", "historybook", "evergreen", "nowé", "éprior"]) {
+    const input = packet(); input.psychosocial.baselineMood = value;
+    const source = assessment.createAssessmentWorkspace(input, "NJ").facts.find((f) => f.sourceField === "psychosocial-baseline-mood");
+    assert.equal(source.temporalStatus, "unknown", value);
+    assert.equal(source.normalizedValue, value);
+  }
+});
+
+test("temporal inference preserves actual current, recent, and historical tokens and phrases", () => {
+  for (const [value, expected] of [
+    ["Current concern.", "current"], ["Currently reported.", "current"], ["Reported today.", "current"], ["Present now.", "current"],
+    ["Recent concern.", "recent"], ["Recently reported.", "recent"], ["Last week.", "recent"], ["Last six months.", "recent"], ["Past month.", "recent"],
+    ["History of concern.", "historical"], ["Historical report.", "historical"], ["Historically reported.", "historical"], ["Previous concern.", "historical"], ["Previously reported.", "historical"], ["Prior concern.", "historical"], ["In the past.", "historical"], ["Former concern.", "historical"], ["Formerly reported.", "historical"], ["Ever reported.", "historical"],
+    ["(PRIOR) concern.", "historical"], ["Previously-reported concern.", "historical"], ["Past\nweek.", "recent"], ["Reported ＴＯＤＡＹ.", "current"]
+  ]) {
+    const input = packet(); input.psychosocial.baselineMood = value;
+    assert.equal(assessment.createAssessmentWorkspace(input, "NJ").facts.find((f) => f.sourceField === "psychosocial-baseline-mood").temporalStatus, expected, value);
+  }
+});
+
+test("camelCase field context retains history/current meaning without classifying priorities as prior", () => {
+  const input = packet();
+  input.living.currentResidence = "Apartment.";
+  input.medicalHistory.majorMedicalDiagnoses = "Documented condition.";
+  input.goals.servicePriorities = "Transportation support.";
+  const sources = assessment.createAssessmentWorkspace(input, "NJ").facts;
+  assert.equal(sources.find((f) => f.sourceField === "living-current-residence").temporalStatus, "current");
+  assert.equal(sources.find((f) => f.sourceField === "medical-history-major-medical-diagnoses").temporalStatus, "historical");
+  assert.equal(sources.find((f) => f.sourceField === "goals-service-priorities").temporalStatus, "unknown");
+});
+
+test("explicit mapped timeframe and unknown/not-assessed/denied semantics retain their separate meanings", () => {
+  const input = packet();
+  input.medicalHistory.currentMedications = "Previously documented medication list.";
+  input.psychosocial.mentalHealthHistory = "Current report of history.";
+  input.psychosocial.baselineMood = "Not assessed";
+  input.functional.memoryConcerns = "Unknown";
+  input.identifying.interpreterNeeded = "No";
+  const sources = assessment.createAssessmentWorkspace(input, "NJ").facts;
+  const field = (name) => sources.find((f) => f.sourceField === name);
+  assert.equal(field("medical-history-current-medications").temporalStatus, "current");
+  assert.equal(field("psychosocial-mental-health-history").temporalStatus, "historical");
+  assert.equal(field("psychosocial-baseline-mood").semantics.polarity, "not_assessed");
+  assert.equal(field("functional-memory-concerns").semantics.polarity, "unknown");
+  assert.equal(field("identifying-interpreter-needed").semantics.polarity, "denied");
+});
+
 test("direct participant identifiers never become source facts", () => {
   const input = packet();
   input.identifying.participantName = "Jordan Sample";

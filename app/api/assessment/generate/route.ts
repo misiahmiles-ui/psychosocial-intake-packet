@@ -15,10 +15,12 @@ import {
 } from "@/lib/assessmentAccess";
 import {
   AssessmentProviderError,
+  generateLeanMasterAssessment,
   generateAssessmentClaims
 } from "@/lib/assessmentProvider";
 import { recordAssessmentValidationFailure, recordAssessmentValidationSuccess } from "@/lib/assessmentValidationTelemetry";
-import { authoritativeAssessmentBlocks, renderAssessmentSynthesis, scanAssessmentSynthesis, validateAssessmentSynthesis } from "@/lib/assessmentSynthesis";
+import { buildDeterministicAssessment } from "@/lib/assessmentFallback";
+import { authoritativeAssessmentBlocks, renderAssessmentSynthesis, repairVerifiedNarrative, scanAssessmentSynthesis, validateAssessmentSynthesis } from "@/lib/assessmentSynthesis";
 import {
   completeAssessmentGeneration,
   releaseAssessmentGeneration,
@@ -101,6 +103,80 @@ export async function POST(request: Request) {
     );
   }
 
+  // Start with a usable source-rendered draft. Optional provider prose is
+  // admitted only under the exact source-bound verified narrative contract.
+  if (assessmentRequest.jurisdiction === "NJ" || assessmentRequest.jurisdiction === "MD") {
+    let reservationId: string | null = null;
+    let completed = false;
+    try {
+      const builtIn = buildDeterministicAssessment(assessmentRequest.facts);
+      if (!builtIn.text || builtIn.outputPhiFindings.length) {
+        return failure("The assessment failed the output privacy scan.", 422, "output_phi_blocked");
+      }
+      if (!access.isOwner) {
+        const reservation = await reserveAssessmentGeneration(access.userId, access.entitlementActivation);
+        if (!reservation.allowed || !reservation.reservationId) {
+          const denial = reservationDenial(reservation.reason);
+          return failure(denial.error, denial.status, reservation.reason);
+        }
+        reservationId = reservation.reservationId;
+      }
+
+      let assessmentText = builtIn.text;
+      let sourceFactIds = builtIn.sourceFactIds;
+      let synthesis: ValidatedAssessmentResponse["synthesis"];
+      if (assessmentRequest.jurisdiction === "NJ" && assessmentRequest.aiEnhancement === true && !request.signal.aborted) {
+        try {
+          const drafted = await generateAssessmentClaims(assessmentRequest, request.signal, true, false, false, true);
+          if (!Array.isArray(drafted) && drafted.renderMode === "verified-prose" &&
+              !scanAssessmentSynthesis(drafted, assessmentRequest.facts).length) {
+            const firstValidation = validateAssessmentSynthesis(drafted, assessmentRequest.facts);
+            const candidate = firstValidation.valid ? drafted : repairVerifiedNarrative(drafted, assessmentRequest.facts);
+            // One repair/revalidation pass. If no original provider wording
+            // survives, use the original built-in assessment instead.
+            const retainsProviderWording = firstValidation.valid || Boolean(candidate?.blocks.some(
+              (block, index) => block.text === drafted.blocks[index]?.text
+            ));
+            if (candidate && retainsProviderWording &&
+                validateAssessmentSynthesis(candidate, assessmentRequest.facts).valid &&
+                !scanAssessmentSynthesis(candidate, assessmentRequest.facts).length) {
+              const rendered = renderAssessmentSynthesis(candidate, assessmentRequest.facts);
+              if (rendered) {
+                assessmentText = rendered;
+                synthesis = candidate;
+                sourceFactIds = [...new Set(candidate.blocks.flatMap((block) => block.sourceFactIds))];
+              }
+            }
+          }
+        } catch (error) {
+          if (request.signal.aborted || (error instanceof AssessmentProviderError && error.failure === "aborted")) throw error;
+        }
+      }
+      if (request.signal.aborted) throw new AssessmentProviderError("aborted");
+      const usage = access.isOwner ? null : await completeAssessmentGeneration(access.userId, reservationId as string);
+      completed = true;
+      const response: ValidatedAssessmentResponse = {
+        assessmentText, claims: [],
+        ...(synthesis ? { synthesis, generationMethod: "ai" as const } : { generationMethod: "deterministic" as const }),
+        usage,
+        validation: {
+          criticalUnresolvedConflicts: 0, finalOutboundScan: "passed", outputPhiScan: "passed",
+          preflightPhiScan: "passed", safetyPreserved: "passed", sourceFactsUsed: sourceFactIds.length,
+          sourceGrounding: synthesis ? "verified_prose" : "source_rendered", unsupportedDiagnosisDetected: false
+        }
+      };
+      recordAssessmentValidationSuccess(performance.now() - startedAt, access.isOwner, synthesis ? "verified-prose-v1" : "deterministic-v1");
+      return NextResponse.json(response, { status: 200, headers: NO_STORE_HEADERS });
+    } catch (error) {
+      return failure(error instanceof AssessmentProviderError && error.failure === "aborted"
+        ? "Assessment creation was canceled." : "Assessment creation could not be completed.",
+        error instanceof AssessmentProviderError && error.failure === "aborted" ? 499 : 503,
+        "unavailable");
+    } finally {
+      if (reservationId && !completed) await releaseAssessmentGeneration(access.userId, reservationId).catch(() => undefined);
+    }
+  }
+
   let reservationId: string | null = null;
   let completed = false;
   try {
@@ -136,10 +212,29 @@ export async function POST(request: Request) {
     }
 
     const assessmentFormat = request.headers.get("X-Assessment-Format") ?? "";
-    const usesNJSynthesis = assessmentRequest.jurisdiction === "NJ" && ["synthesis-v1", "synthesis-v2", "synthesis-v3", "synthesis-v4"].includes(assessmentFormat);
-    const usesLegacyModelSemanticReview = assessmentRequest.jurisdiction === "NJ" && assessmentFormat === "synthesis-v2";
-    const usesSourceSelection = assessmentRequest.jurisdiction === "NJ" && assessmentFormat === "synthesis-v4";
-    const draft = await generateAssessmentClaims(
+    const legacyJurisdiction: string = assessmentRequest.jurisdiction;
+    const usesAIFirst = legacyJurisdiction === "NJ" && assessmentFormat === "ai-first-v1";
+    let deterministic = legacyJurisdiction === "NJ" && assessmentFormat === "deterministic-v1"
+      ? buildDeterministicAssessment(assessmentRequest.facts) : undefined;
+    const usesLeanMaster = usesAIFirst || (legacyJurisdiction === "NJ" && assessmentFormat === "leanmaster-v1");
+    const usesNJSynthesis = legacyJurisdiction === "NJ" && ["synthesis-v1", "synthesis-v2", "synthesis-v3", "synthesis-v4"].includes(assessmentFormat);
+    const usesLegacyModelSemanticReview = legacyJurisdiction === "NJ" && assessmentFormat === "synthesis-v2";
+    const usesSourceSelection = legacyJurisdiction === "NJ" && assessmentFormat === "synthesis-v4";
+    let leanMaster: Awaited<ReturnType<typeof generateLeanMasterAssessment>> | undefined;
+    if (usesLeanMaster) {
+      try {
+        leanMaster = await generateLeanMasterAssessment(assessmentRequest, request.signal);
+      } catch (error) {
+        // Explicit cancellation and an outbound privacy block remain blocking.
+        // Provider/response/validation failures use only the reviewed facts;
+        // partial or rejected AI text never enters the fallback renderer.
+        if (!usesAIFirst || request.signal.aborted ||
+          (error instanceof AssessmentProviderError && ["aborted", "privacy_blocked"].includes(error.failure))) throw error;
+        deterministic = buildDeterministicAssessment(assessmentRequest.facts);
+      }
+    }
+    if (deterministic?.outputPhiFindings.length) throw new AssessmentProviderError("output_phi_blocked");
+    const draft = leanMaster || deterministic ? [] : await generateAssessmentClaims(
       assessmentRequest,
       request.signal,
       usesNJSynthesis,
@@ -148,7 +243,7 @@ export async function POST(request: Request) {
     );
     const synthesis = !Array.isArray(draft) ? draft : undefined;
     const claims = Array.isArray(draft) ? draft : [];
-    const claimValidation = synthesis
+    const claimValidation = leanMaster || deterministic ? { valid: true, issues: [], claims: [] } : synthesis
       ? { ...validateAssessmentSynthesis(synthesis, assessmentRequest.facts), claims: [] }
       : validateClaims(claims, assessmentRequest.facts);
     if (!claimValidation.valid || (usesLegacyModelSemanticReview && !synthesis?.semanticReview)) {
@@ -160,7 +255,9 @@ export async function POST(request: Request) {
       );
     }
 
-    if (synthesis ? scanAssessmentSynthesis(synthesis, assessmentRequest.facts).length : scanGeneratedClaims(claimValidation.claims).length) {
+    // The LeanMaster provider returns only after its complete rendered output
+    // has passed its mandatory PHI scan. Legacy formats retain their own scan.
+    if (!leanMaster && !deterministic && (synthesis ? scanAssessmentSynthesis(synthesis, assessmentRequest.facts).length : scanGeneratedClaims(claimValidation.claims).length)) {
       return failure(
         "The generated assessment did not pass the post-generation privacy scan. No generation was charged.",
         502,
@@ -168,7 +265,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const assessmentText = synthesis ? renderAssessmentSynthesis(synthesis, assessmentRequest.facts) : renderAssessmentFromClaims(claimValidation.claims);
+    const assessmentText = deterministic ? deterministic.text : leanMaster ? leanMaster.text : synthesis ? renderAssessmentSynthesis(synthesis, assessmentRequest.facts) : renderAssessmentFromClaims(claimValidation.claims);
     if (!assessmentText) {
       return failure(
         "The generated assessment was incomplete. No generation was charged.",
@@ -178,11 +275,13 @@ export async function POST(request: Request) {
     }
 
     if (request.signal.aborted) throw new AssessmentProviderError("aborted");
-    const usage = access.isOwner
+    const usage = access.isOwner || deterministic
       ? null
       : await completeAssessmentGeneration(access.userId, reservationId as string);
-    completed = true;
-    const validationFormat = !synthesis
+    // A fallback is not a successful AI generation. Leave completed false so
+    // finally releases the failed attempt's reservation before returning it.
+    completed = !deterministic;
+    const validationFormat = deterministic ? "deterministic-v1" : leanMaster ? "leanmaster-v1" : !synthesis
       ? "claims-v1"
       : assessmentFormat === "synthesis-v4"
         ? "synthesis-v4"
@@ -193,13 +292,16 @@ export async function POST(request: Request) {
             : "synthesis-v1";
     recordAssessmentValidationSuccess(performance.now() - startedAt, access.isOwner, validationFormat);
     const authoritative = authoritativeAssessmentBlocks(assessmentRequest.facts);
-    const sourceFactsUsed = new Set(synthesis
+    const sourceFactsUsed = deterministic ? deterministic.sourceFactIds.length : leanMaster ? leanMaster.sourceFactIds.length : new Set(synthesis
       ? [...synthesis.blocks.flatMap((block) => block.sourceFactIds), ...authoritative.safety.flatMap((block) => block.sourceFactIds), ...(authoritative.screening?.sourceFactIds ?? [])]
       : claimValidation.claims.flatMap((claim) => claim.sourceFactIds)).size;
     const response: ValidatedAssessmentResponse = {
       assessmentText,
       claims: claimValidation.claims,
       ...(synthesis ? { synthesis } : {}),
+      ...(leanMaster ? { leanmasterNote: leanMaster.note } : {}),
+      ...(leanMaster ? { generationMethod: "ai" as const } : {}),
+      ...(deterministic ? { generationMethod: "deterministic" as const } : {}),
       usage,
       validation: {
         criticalUnresolvedConflicts: 0,
@@ -208,7 +310,7 @@ export async function POST(request: Request) {
         preflightPhiScan: "passed",
         safetyPreserved: "passed",
         sourceFactsUsed,
-        sourceGrounding: "passed",
+        sourceGrounding: deterministic ? "source_rendered" : leanMaster ? "references_checked" : "passed",
         unsupportedDiagnosisDetected: false
       }
     };
@@ -255,13 +357,13 @@ function reservationDenial(reason: string) {
   }
   if (reason === "entitlement_exhausted") {
     return {
-      error: "The included assessment-generation credits have been used.",
+      error: "The 25 included assessments for this billing cycle have been used.",
       status: 429
     };
   }
   if (reason === "entitlement_inactive") {
     return {
-      error: "The assessment-generation entitlement window is not active.",
+      error: "The assessment billing cycle is not active.",
       status: 403
     };
   }
