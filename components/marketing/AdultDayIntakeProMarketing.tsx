@@ -159,6 +159,51 @@ export function AdultDayIntakeProMarketing() {
         </div>
       </section>
 
+      <section className="border-b border-[#eadad2] bg-[#f7f3e9]">
+        <div className="mx-auto grid max-w-7xl items-center gap-9 px-5 py-14 sm:px-8 lg:grid-cols-[1fr_0.62fr] lg:px-10">
+          <div className="order-2 lg:order-1">
+            <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#c85f75]">
+              See the workflow in action
+            </p>
+            <h2 className="mt-3 max-w-2xl text-3xl font-bold tracking-normal text-[#174f80] sm:text-4xl">
+              From completed intake to a clear psychosocial assessment.
+            </h2>
+            <p className="mt-4 max-w-2xl leading-7 text-[#435665]">
+              The interview is only the beginning. This psychosocial workflow helps you move from documented intake information to an assessment draft you can review, edit, and accept using your own professional judgment.
+            </p>
+            <div className="mt-7 grid gap-3 sm:grid-cols-2">
+              {[
+                ["1", "Complete the intake", "Capture the psychosocial details in one organized workflow."],
+                ["2", "Generate the assessment", "Turn documented facts into a structured assessment draft."],
+                ["3", "Review and personalize", "Edit the language and confirm the clinical content."],
+                ["4", "Export your PDF", "Create a PDF-ready record for your agency process."]
+              ].map(([number, title, text]) => (
+                <article key={number} className="rounded-lg border border-[#eadad2] bg-white p-4 shadow-sm">
+                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#174f80] text-sm font-bold text-white">
+                    {number}
+                  </span>
+                  <h3 className="mt-3 font-bold text-[#174f80]">{title}</h3>
+                  <p className="mt-1 text-sm leading-6 text-[#435665]">{text}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+          <div className="order-1 mx-auto w-full max-w-[22rem] lg:order-2 lg:max-w-none">
+            <div className="overflow-hidden rounded-2xl border-[10px] border-[#183c5a] bg-[#111827] shadow-xl">
+              <video
+                className="aspect-[9/16] w-full bg-black object-contain"
+                controls
+                preload="metadata"
+                aria-label="Marvin Miles explains the Psychosocial Intake PDF Workflow"
+              >
+                <source src="/videos/psychosocial-workflow-presenter.mp4" type="video/mp4" />
+                Your browser does not support the video tag.
+              </video>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section className="border-b border-[#eadad2] bg-[#fffaf6]">
         <div className="mx-auto grid max-w-7xl gap-5 px-5 py-12 sm:px-8 lg:grid-cols-3 lg:px-10">
           {workflowCards.map(({ icon: Icon, title, text }) => (
