@@ -25,11 +25,11 @@ import {
 } from "@/lib/assessment";
 import {
   INITIAL_ASSESSMENT_ENTITLEMENT_DETAIL,
-  INITIAL_ASSESSMENT_ENTITLEMENT_LABEL,
-  RECURRING_ASSESSMENT_ENTITLEMENT_LABEL
+  INITIAL_ASSESSMENT_ENTITLEMENT_LABEL
 } from "@/lib/assessmentEntitlementPolicy";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { renderAssessmentSynthesis, scanAssessmentSynthesis, validateAssessmentSynthesis } from "@/lib/assessmentSynthesis";
+import { buildDeterministicAssessment } from "@/lib/assessmentFallback";
 import type {
   AcceptedAssessment,
   AssessmentClaim,
@@ -76,6 +76,8 @@ export function AssessmentWorkflow({
   const [validation, setValidation] = useState<ValidatedAssessmentResponse["validation"] | null>(null);
   const [usage, setUsage] = useState<ValidatedAssessmentResponse["usage"] | null>(null);
   const [message, setMessage] = useState("");
+  const [aiEnhancement, setAiEnhancement] = useState(false);
+  const [generationMethod, setGenerationMethod] = useState<"ai" | "deterministic" | null>(null);
   const abortController = useRef<AbortController | null>(null);
 
   const findings = useMemo(
@@ -146,6 +148,7 @@ export function AssessmentWorkflow({
     const requestBody: AssessmentRequest = {
       facts: outboundFacts,
       jurisdiction,
+      aiEnhancement: jurisdiction === "NJ" && aiEnhancement,
       reviewedAmbiguousFindings: reviewed,
       version: 1
     };
@@ -164,7 +167,7 @@ export function AssessmentWorkflow({
       if (process.env.NODE_ENV !== "production" && developmentPreview) {
         await new Promise((resolve) => window.setTimeout(resolve, 900));
         if (developmentPreview === "failure") {
-          throw new Error("Previewed generation failure. The intake remains available and no generation is consumed.");
+          throw new Error("Previewed creation failure. The intake remains available and no assessment use is consumed.");
         }
         const previewClaims = createDevelopmentClaims(outboundFacts);
         const checked = validateClaims(previewClaims, outboundFacts);
@@ -186,6 +189,7 @@ export function AssessmentWorkflow({
           unsupportedDiagnosisDetected: false
         });
         setUsage(null);
+        setGenerationMethod("deterministic");
         setStage("review");
         return;
       }
@@ -200,7 +204,6 @@ export function AssessmentWorkflow({
         credentials: "same-origin",
         headers: {
           Authorization: `Bearer ${session.access_token}`,
-          ...(jurisdiction === "NJ" ? { "X-Assessment-Format": "synthesis-v4" } : {}),
           "Content-Type": "application/json"
         },
         body: JSON.stringify(requestBody),
@@ -214,15 +217,24 @@ export function AssessmentWorkflow({
         throw new Error("The assessment response was incomplete and was not accepted.");
       }
 
-      const checked = result.synthesis && jurisdiction === "NJ"
+      const deterministic = result.generationMethod === "deterministic"
+        ? buildDeterministicAssessment(outboundFacts) : undefined;
+      const ai = jurisdiction === "NJ" && result.generationMethod === "ai" && result.synthesis?.renderMode === "verified-prose"
+        ? validateAssessmentSynthesis(result.synthesis, outboundFacts) : undefined;
+      if (!(deterministic
+        ? !deterministic.outputPhiFindings.length && result.validation.sourceGrounding === "source_rendered"
+        : ai?.valid && result.validation.sourceGrounding === "verified_prose")) {
+        throw new Error("The assessment response failed local validation and was not accepted.");
+      }
+      const checked = deterministic || ai?.valid ? { valid: true, claims: [] } : result.synthesis && jurisdiction === "NJ"
         ? { ...validateAssessmentSynthesis(result.synthesis, outboundFacts), claims: [] }
         : validateClaims(result.claims, outboundFacts);
-      const rendered = result.synthesis && jurisdiction === "NJ"
+      const rendered = deterministic ? deterministic.text : ai?.valid && result.synthesis ? renderAssessmentSynthesis(result.synthesis, outboundFacts) : result.synthesis && jurisdiction === "NJ"
         ? renderAssessmentSynthesis(result.synthesis, outboundFacts)
         : renderAssessmentFromClaims(checked.claims);
       if (
         !checked.valid ||
-        (result.synthesis ? scanAssessmentSynthesis(result.synthesis, outboundFacts).length : scanGeneratedClaims(checked.claims).length) ||
+        (!deterministic && (result.synthesis ? scanAssessmentSynthesis(result.synthesis, outboundFacts).length : scanGeneratedClaims(checked.claims).length)) ||
         !rendered ||
         rendered !== result.assessmentText
       ) {
@@ -234,14 +246,15 @@ export function AssessmentWorkflow({
       setGeneratedRevision(workspaceRevision);
       setValidation(result.validation);
       setUsage(result.usage);
+      setGenerationMethod(result.generationMethod ?? null);
       setStage("review");
     } catch (error) {
       setMessage(
         error instanceof DOMException && error.name === "AbortError"
-          ? "Generation was canceled. The attempt does not consume a generation."
+          ? "Assessment creation was canceled. No assessment use was consumed."
           : error instanceof Error
             ? error.message
-            : "Assessment generation could not be completed."
+            : "Assessment creation could not be completed."
       );
       setStage("local-review");
     } finally {
@@ -266,15 +279,15 @@ export function AssessmentWorkflow({
     <section className="no-print rounded-lg border border-[#b9d9d1] bg-white p-5 shadow-sm sm:p-6" aria-labelledby="assessment-workflow-title">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-bold uppercase tracking-[0.16em] text-clay">Optional AI-assisted draft</p>
+          <p className="text-sm font-bold uppercase tracking-[0.16em] text-clay">Psychosocial Assessment Included</p>
           <h2 id="assessment-workflow-title" className="mt-2 text-2xl font-bold text-ink">Psychosocial Assessment</h2>
           <p className="mt-2 max-w-3xl leading-7 text-[#52645f]">
-            The browser first creates a temporary de-identified fact set. Only that fact set may be sent for generation after local privacy and safety review. The original intake remains in this tab and is never sent.
+            {jurisdiction === "NJ" ? "Create a fact-based assessment from your completed intake. You may request AI-enhanced clinical writing after privacy review. Review and edit the assessment before accepting it." : "Create a fact-based assessment from your completed intake. The browser prepares a temporary de-identified fact set for privacy review before creation."}
           </p>
         </div>
         {usage ? (
           <div className="rounded-lg border border-[#cde7df] bg-mint px-4 py-3 text-sm font-semibold text-[#334642]">
-            {usage.successfulGenerationsUsed} of {usage.includedQuantity} successful generations used · {usage.remainingGenerations} remaining · entitlement window ends {formatEntitlementEnd(usage.entitlementExpiresAt)}
+            {usage.successfulGenerationsUsed} of {usage.includedQuantity} assessments used · {usage.remainingGenerations} remaining · billing cycle ends {formatEntitlementEnd(usage.entitlementExpiresAt)}
           </div>
         ) : null}
       </div>
@@ -288,9 +301,9 @@ export function AssessmentWorkflow({
         <div className="mt-5">
           <button type="button" onClick={beginLocalReview} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-sea px-4 py-2 font-bold text-white transition hover:bg-[#0b615b]">
             <WandSparkles className="h-4 w-4" aria-hidden="true" />
-            Generate Psychosocial Assessment
+            Review Assessment Privacy
           </button>
-          <p className="mt-3 text-sm leading-6 text-[#52645f]">{INITIAL_ASSESSMENT_ENTITLEMENT_LABEL}. {INITIAL_ASSESSMENT_ENTITLEMENT_DETAIL} Afterward, {RECURRING_ASSESSMENT_ENTITLEMENT_LABEL}. Only a successful, validated assessment counts.</p>
+          <p className="mt-3 text-sm leading-6 text-[#52645f]">{INITIAL_ASSESSMENT_ENTITLEMENT_LABEL}. {INITIAL_ASSESSMENT_ENTITLEMENT_DETAIL}</p>
         </div>
       ) : null}
 
@@ -315,9 +328,10 @@ export function AssessmentWorkflow({
             onChoose={(conflictId, factId) => setConflictChoices((current) => ({ ...current, [conflictId]: factId }))}
           />
           <div className="flex flex-wrap gap-2">
+            {jurisdiction === "NJ" ? <label className="flex items-center gap-2 text-sm text-ink"><input type="checkbox" checked={aiEnhancement} onChange={(event) => setAiEnhancement(event.target.checked)} /> Enhance clinical writing with AI after privacy review (optional)</label> : null}
             <button type="button" onClick={generate} disabled={Boolean(workspaceIsStale || findings.length || unresolvedConflicts.length || !facts.length)} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-sea px-4 py-2 font-bold text-white transition hover:bg-[#0b615b] disabled:cursor-not-allowed disabled:opacity-50">
               <ShieldAlert className="h-4 w-4" aria-hidden="true" />
-              Privacy Review Complete — Generate
+              Privacy Review Complete — Create Psychosocial Assessment
             </button>
             {workspaceIsStale ? <button type="button" onClick={beginLocalReview} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[#b9c7c3] bg-white px-4 py-2 font-bold text-ink hover:border-sea"><RotateCcw className="h-4 w-4" aria-hidden="true" /> Refresh Privacy Review from Current Intake</button> : null}
             <button type="button" onClick={onReturnToIntake} className="inline-flex min-h-11 items-center rounded-lg border border-[#b9c7c3] px-4 py-2 font-bold text-ink hover:border-sea">Return to Intake</button>
@@ -328,7 +342,7 @@ export function AssessmentWorkflow({
       {stage === "generating" ? (
         <div className="mt-6 rounded-lg border border-[#cde7df] bg-mint p-5" role="status">
           <p className="font-bold text-sea">Generating and validating the assessment…</p>
-          <p className="mt-2 text-sm leading-6 text-[#334642]">The result will be rejected unless every claim is source-grounded and the post-generation privacy scan passes.</p>
+          <p className="mt-2 text-sm leading-6 text-[#334642]">{jurisdiction === "NJ" ? "Checking privacy, source references, screening and clinical safety boundaries. The assessment will appear here for your usual clinical review and editing." : "The result will be rejected unless every claim is source-grounded and the post-generation privacy scan passes."}</p>
           <button type="button" onClick={() => abortController.current?.abort()} className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-lg border border-[#b9c7c3] bg-white px-4 py-2 font-bold text-ink">
             <X className="h-4 w-4" aria-hidden="true" /> Cancel generation
           </button>
@@ -337,6 +351,7 @@ export function AssessmentWorkflow({
 
       {stage === "review" ? (
         <div className="mt-6 grid gap-5">
+          {validation?.sourceGrounding === "source_rendered" || validation?.sourceGrounding === "verified_prose" ? <Notice tone="success">{generationMethod === "ai" ? "AI-enhanced clinical narrative passed source-bound validation. Review and edit before accepting." : "Built-in fact-based assessment created from reviewed intake facts. Review and edit before accepting."}</Notice> : null}
           {stale ? <Notice tone="warning">Assessment-source intake fields changed after generation. Regenerate from the current intake before accepting.</Notice> : null}
           <div className="rounded-lg border border-[#d7dfdc] bg-[#fbfcfb] p-4">
             <div className="flex items-center gap-2 font-bold text-ink"><Pencil className="h-4 w-4" aria-hidden="true" /> Clinician review and edit</div>
@@ -346,8 +361,8 @@ export function AssessmentWorkflow({
           </div>
           {validation ? (
             <div className="rounded-lg border border-[#cde7df] bg-mint p-4 text-sm text-[#334642]">
-              <p className="flex items-center gap-2 font-bold text-sea"><CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Generated draft validation passed</p>
-              <p className="mt-2 leading-6">Preflight and final outbound PHI scans passed; post-output PHI scan passed; {validation.sourceFactsUsed} source facts were cited; no unsupported diagnosis or unresolved critical safety conflict was accepted.</p>
+              <p className="flex items-center gap-2 font-bold text-sea"><CheckCircle2 className="h-4 w-4" aria-hidden="true" /> {validation.sourceGrounding === "references_checked" ? "Automated draft checks passed" : "Generated draft validation passed"}</p>
+              <p className="mt-2 leading-6">{validation.sourceGrounding === "source_rendered" || validation.sourceGrounding === "verified_prose" ? `${validation.sourceFactsUsed} reviewed intake facts support this draft. Safety and screening text remains authoritative, and privacy checks passed. ${generationMethod === "ai" ? "The AI-written clinical paragraphs use verified source-bound wording." : "The built-in draft does not require AI."} Review every section before accepting.` : validation.sourceGrounding === "references_checked" ? `Privacy scans, source-reference checks, screening and safety-boundary checks passed; ${validation.sourceFactsUsed} intake facts were cited. Automated checks do not replace clinical judgment or verify every narrative statement. Review and edit using the assessment area above.` : `Preflight and final outbound PHI scans passed; post-output PHI scan passed; ${validation.sourceFactsUsed} source facts were cited; no unsupported diagnosis or unresolved critical safety conflict was accepted.`}</p>
             </div>
           ) : null}
           <div className="flex flex-wrap gap-2">
@@ -355,7 +370,7 @@ export function AssessmentWorkflow({
             <button type="button" onClick={beginLocalReview} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[#b9c7c3] bg-white px-4 py-2 font-bold text-ink hover:border-sea"><RotateCcw className="h-4 w-4" aria-hidden="true" /> {stale ? "Regenerate Using Updated Intake" : "Regenerate Assessment"}</button>
             <button type="button" onClick={onReturnToIntake} className="inline-flex min-h-11 items-center rounded-lg border border-[#b9c7c3] px-4 py-2 font-bold text-ink hover:border-sea">Return to Intake</button>
           </div>
-          <p className="text-sm leading-6 text-[#52645f]">Regeneration starts again from the current intake only, never from this assessment text or clinician edits. Each successful regenerated and validated assessment counts as another generation.</p>
+          <p className="text-sm leading-6 text-[#52645f]">Create a new assessment from the current intake if the source facts change. Each completed assessment workflow counts once; AI enhancement adds no separate use.</p>
         </div>
       ) : null}
     </section>
@@ -495,15 +510,15 @@ function readSafeGenerationError(status: number, value: unknown) {
     return value.error;
   }
   if (status === 504) {
-    return "Assessment generation timed out before a validated response was received. No generation was charged.";
+    return "Assessment creation timed out before a usable response was received. No assessment use was consumed.";
   }
   if (status === 502 || status === 503) {
-    return "Assessment generation is temporarily unavailable. No generation was charged.";
+    return "Assessment creation is temporarily unavailable. No assessment use was consumed.";
   }
   if (status === 429) {
-    return "Assessment generation is temporarily limited. Please wait before trying again.";
+    return "Assessment creation is temporarily limited. Please wait before trying again.";
   }
-  return "Assessment generation could not be completed.";
+  return "Assessment creation could not be completed.";
 }
 
 function isValidatedResponse(value: unknown): value is ValidatedAssessmentResponse {

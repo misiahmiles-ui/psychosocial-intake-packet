@@ -12,7 +12,7 @@ const tests = [
     assert.match(endpoint, /if \(!access\.isOwner\) \{[\s\S]*reserveAssessmentGeneration/);
   }],
   ["owner generation does not consume credits", () => {
-    assert.match(endpoint, /const usage = access\.isOwner\s*\? null\s*:\s*await completeAssessmentGeneration/);
+    assert.match(endpoint, /const usage = access\.isOwner \|\| deterministic\s*\? null\s*:\s*await completeAssessmentGeneration/);
   }],
   ["owner regeneration does not consume credits", () => {
     assert.match(workflow, /Regenerate Assessment/);
@@ -23,7 +23,7 @@ const tests = [
     const ownerGuard = endpoint.indexOf("if (!access.isOwner)");
     const reserve = endpoint.lastIndexOf("reserveAssessmentGeneration");
     assert.ok(ownerGuard >= 0 && reserve > ownerGuard);
-    assert.match(endpoint, /const usage = access\.isOwner\s*\? null/);
+    assert.match(endpoint, /const usage = access\.isOwner \|\| deterministic\s*\? null/);
     assert.match(endpoint, /if \(reservationId && !completed\)[\s\S]*releaseAssessmentGeneration/);
   }],
   ["normal customers still require a valid entitlement", () => {

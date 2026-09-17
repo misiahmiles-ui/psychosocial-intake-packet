@@ -474,7 +474,7 @@ export function applyConflictResolutions(
 export function validateAssessmentRequestShape(value: unknown): string[] {
   const issues: string[] = [];
   if (!isObject(value)) return ["Request must be an object."];
-  const allowedTop = new Set(["version", "jurisdiction", "facts", "reviewedAmbiguousFindings"]);
+  const allowedTop = new Set(["version", "jurisdiction", "facts", "reviewedAmbiguousFindings", "aiEnhancement"]);
   Object.keys(value).forEach((key) => {
     if (!allowedTop.has(key)) issues.push(`Unexpected request field: ${key}.`);
   });
@@ -482,6 +482,7 @@ export function validateAssessmentRequestShape(value: unknown): string[] {
   if (value.jurisdiction !== "NJ" && value.jurisdiction !== "MD") {
     issues.push("Jurisdiction must be NJ or MD.");
   }
+  if (value.aiEnhancement !== undefined && typeof value.aiEnhancement !== "boolean") issues.push("AI enhancement must be a boolean.");
   if (!Array.isArray(value.facts) || value.facts.length < 1 || value.facts.length > 180) {
     issues.push("Facts must contain between 1 and 180 items.");
   }
@@ -682,10 +683,15 @@ function inferPolarity(value: string) {
 }
 
 function inferTemporalStatus(path: string, value: string): TemporalStatus {
-  const lower = `${path} ${value}`.toLowerCase();
-  if (/\bcurrent|currently|today|now\b/.test(lower)) return "current";
-  if (/\brecent|last\s+(?:week|month|six months)|past\s+(?:week|month|year)\b/.test(lower)) return "recent";
-  if (/history|historical|previous|prior|past|former|ever/.test(lower)) return "historical";
+  // Field paths use camelCase; values are prose. Tokenize the path first so
+  // medicalHistory/currentResidence retain their context without matching
+  // "prior" in servicePriorities or "ever" in several/never/every.
+  const pathWords = path.replace(/([a-z0-9])([A-Z])/g, "$1 $2");
+  const words = `${pathWords} ${value}`.normalize("NFKC").toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ");
+  if (/(?:^| )(?:current|currently|today|now)(?= |$)/.test(words)) return "current";
+  if (/(?:^| )(?:recent|recently|last (?:week|month|six months)|past (?:week|month|year))(?= |$)/.test(words)) return "recent";
+  if (/(?:^| )(?:history|historical|historically|previous|previously|prior|past|former|formerly|ever)(?= |$)/.test(words)) return "historical";
   return "unknown";
 }
 

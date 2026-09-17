@@ -10,7 +10,7 @@ export type SynthesisBlock = {
   text: string;
   sourceFactIds: string[];
 };
-export type AssessmentSynthesis = { blocks: SynthesisBlock[]; semanticReview?: SemanticReview; renderMode?: "source-ledger" };
+export type AssessmentSynthesis = { blocks: SynthesisBlock[]; semanticReview?: SemanticReview; renderMode?: "source-ledger" | "verified-prose" };
 export type AssessmentSourceSelection = { paragraphs: { sourceFactIds: string[] }[] };
 
 const slug = (value: string) => value.replace(/([a-z])([A-Z])/g, "$1-$2").replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase();
@@ -22,14 +22,15 @@ export function sourceEvidenceLabel(fact: AssessmentFact) { return labels.get(fa
 
 export function parseAssessmentSynthesis(value: unknown): AssessmentSynthesis | null {
   if (!record(value) || Object.keys(value).some((key) => !["blocks", "semanticReview", "renderMode"].includes(key)) || !Array.isArray(value.blocks) || value.blocks.length > 11 ||
-    (value.renderMode !== undefined && value.renderMode !== "source-ledger")) return null;
+    (value.renderMode !== undefined && !["source-ledger", "verified-prose"].includes(String(value.renderMode)))) return null;
   const sourceLedger = value.renderMode === "source-ledger";
+  const verifiedProse = value.renderMode === "verified-prose";
   const blocks: SynthesisBlock[] = [];
   for (const raw of value.blocks) {
     if (!record(raw) || Object.keys(raw).length !== 3 ||
       !SYNTHESIS_SECTIONS.includes(raw.section as never) || typeof raw.text !== "string" ||
-      raw.text.trim().length < 5 || raw.text.length > (sourceLedger ? 2400 : 1100) || /\n/.test(raw.text) ||
-      (!sourceLedger && sentences(raw.text).length !== 1) ||
+      raw.text.trim().length < 5 || raw.text.length > (sourceLedger || verifiedProse ? 2400 : 1100) || /\n/.test(raw.text) ||
+      (!sourceLedger && !verifiedProse && sentences(raw.text).length !== 1) ||
       !Array.isArray(raw.sourceFactIds) || raw.sourceFactIds.length < 1 || raw.sourceFactIds.length > 16 ||
       raw.sourceFactIds.some((id) => typeof id !== "string" || !/^fact-\d{3}$/.test(id)) ||
       new Set(raw.sourceFactIds).size !== raw.sourceFactIds.length) return null;
@@ -39,13 +40,150 @@ export function parseAssessmentSynthesis(value: unknown): AssessmentSynthesis | 
   if (count("assessment") < 3 || count("assessment") > 5 || count("strengths") > 1 ||
     count("needs") > 1 || count("plan") < 2 || count("plan") > 4) return null;
   return { blocks, ...(value.semanticReview === undefined ? {} : { semanticReview: value.semanticReview as SemanticReview }),
-    ...(sourceLedger ? { renderMode: "source-ledger" as const } : {}) };
+    ...(sourceLedger ? { renderMode: "source-ledger" as const } : verifiedProse ? { renderMode: "verified-prose" as const } : {}) };
 }
 
 const SOURCE_ID = /^fact-\d{3}$/;
 const STRENGTH_FIELDS = ["psychosocial-strengths-coping", "home-visit-group-community-supports"];
 const NEED_FIELDS = ["psychosocial-current-stressors", "goals-social-work-services-needed"];
 const PLAN_FIELDS = ["goals-participant-family-goals", "goals-social-work-services-needed", "goals-service-priorities", "quarterly-discharge-supportive-services"];
+
+// Closed, source-bound professional paraphrases. The provider writes the
+// paragraph text by choosing, ordering, and grouping these statements. An
+// arbitrary free-form clinical sentence has no deterministic safety proof and
+// cannot pass this contract.
+export function verifiedNarrativeOptions(fact: AssessmentFact, section: SynthesisBlock["section"]) {
+  if (["safety", "cognitive_screening"].includes(fact.domain)) return [];
+  if (section === "strengths" && !STRENGTH_FIELDS.includes(fact.sourceField)) return [];
+  if (section === "needs" && !NEED_FIELDS.includes(fact.sourceField)) return [];
+  if (section === "plan" && !PLAN_FIELDS.includes(fact.sourceField)) return [];
+  if (section !== "assessment" && ["denied", "unknown", "not_assessed", "not_applicable"].includes(fact.semantics.polarity)) return [];
+  const value = fact.normalizedValue.trim().replace(/\s+/g, " ").replace(/[.!?]+$/, "");
+  if (!value) return [];
+  const lower = (text: string) => text[0].toLowerCase() + text.slice(1);
+  if (section === "plan") {
+    const plans: Record<string, string> = {
+      "goals-participant-family-goals": /^improve socialization, maintain routine, reduce isolation, and support caregiver respite$/i.test(value)
+        ? "The LSW will review goals for improved socialization, a maintained routine, reduced isolation, and caregiver respite with the participant and family."
+        : `The LSW will review the participant and family goals recorded in the intake (${value}) and clarify priorities with them.`,
+      "goals-social-work-services-needed": `The LSW will assess the documented need for ${lower(value)}.`,
+      "goals-service-priorities": /^promote safe attendance, increase activity engagement, monitor mood, support care planning$/i.test(value)
+        ? "The LSW will use the documented priorities of safe attendance, activity engagement, mood monitoring, and care planning to guide follow-up."
+        : `The LSW will use the documented priorities (${value}) to guide care planning.`,
+      "quarterly-discharge-supportive-services": /^home care; meals on wheels; mental health$/i.test(value)
+        ? "The LSW will review possible home care, Meals on Wheels, and mental health services as needs change."
+        : `The LSW will review the documented supportive-service considerations (${value}) as needs change.`
+    };
+    const first = plans[fact.sourceField] ?? `The LSW will review the documented service consideration (${value}).`;
+    return [first, first.replace(/^The LSW will /, "As part of care planning, the LSW will ")];
+  }
+  // Direct clinical clauses are used only for recognizable source wording. All
+  // other values retain an explicit evidence frame, including reporter and time.
+  const direct: Record<string, [RegExp, string]> = {
+    "calculated-age": [/^age: (\d+)$/i, `At assessment, the participant was ${value.match(/^age: (\d+)$/i)?.[1]} years old.`],
+    "living-current-residence": [/^private apartment\b/i, `The participant resides in a ${lower(value)}.`],
+    "living-lives-with": [/^(?:alone|with|family|spouse|partner)\b/i, `The participant lives ${lower(value)}.`],
+    "home-visit-household-composition": [/^one-person household; adult child nearby$/i,
+      "The home visit describes a one-person household with an adult child nearby."],
+    "living-transportation": [/^center transportation requested for program attendance$/i, "Center transportation was requested for program attendance."],
+    "functional-orientation": [/^usually oriented\b/i, `At intake, the participant was ${lower(value)}.`],
+    "functional-ambulation": [/^uses rolling walker for longer distances$/i, "The intake describes use of a rolling walker for longer distances."],
+    "functional-adl-help": [/^needs cueing with bathing and dressing; independent with feeding$/i,
+      "The participant needs cueing with bathing and dressing and is independent with feeding."],
+    "psychosocial-baseline-mood": [/^generally pleasant\b/i, `At intake, the participant was described as ${lower(value)}.`],
+    "psychosocial-mental-health-history": [/^family reports\b/i, `${value}.`],
+    "psychosocial-current-stressors": [/^reduced independence, caregiver availability, transportation$/i,
+      "Current stressors include reduced independence, caregiver availability, and transportation."],
+    "psychosocial-thought-behavior-concerns": [/^no psychosis reported\. may become tearful when overwhelmed$/i,
+      "No psychosis was reported; the intake notes that the participant may become tearful when overwhelmed."],
+    "functional-memory-concerns": [/^short-term memory concerns reported by family$/i, "Family reported short-term memory concerns."],
+    "functional-decision-making": [/^some assistance for appointments and benefits paperwork$/i,
+      "Some assistance is documented for appointments and benefits paperwork."],
+    "functional-transfers": [/^supervision recommended\b/i, `${value}.`],
+    "psychosocial-social-engagement": [/^limited at home; interested in center activities$/i,
+      "Social engagement at home is limited, and the participant is interested in center activities."],
+    "psychosocial-strengths-coping": [/^enjoys\b/i, `The participant ${lower(value)}.`],
+    "home-visit-group-community-supports": [/^faith community phone support$/i, "Faith community phone support is documented."],
+    "goals-social-work-services-needed": [/^benefits counseling\b/i, `Identified social work needs include ${lower(value)}.`],
+    "medical-history-psychiatric-diagnoses": [/^depression by history\b/i, `The record lists ${lower(value)}; this is historical diagnostic information.`],
+    "medical-history-major-medical-diagnoses": [/^hypertension, type 2 diabetes, osteoarthritis$/i, `The documented medical history includes ${lower(value)}.`],
+    "medical-history-current-medications": [/^example medication list attached by family$/i, "A medication list was attached by family."],
+    "communication-communication-needs": [/^face participant when speaking; allow extra response time$/i, "Communication support needs include facing the participant when speaking and allowing extra response time."],
+    "home-visit-comments": [/^sample home visit indicates manageable environment with fall-risk modifications$/i,
+      "The home visit indicates a manageable environment with fall-risk modifications."],
+    "conditions-medication-management": [/^family fills weekly pill organizer$/i,
+      "Family fills a weekly pill organizer."]
+  };
+  const candidate = direct[fact.sourceField];
+  const historyInClause = ["psychosocial-mental-health-history", "medical-history-major-medical-diagnoses", "medical-history-psychiatric-diagnoses"].includes(fact.sourceField);
+  const reporterInClause = ["psychosocial-mental-health-history", "functional-memory-concerns", "conditions-medication-management"].includes(fact.sourceField);
+  const explicitDenial = fact.sourceField === "psychosocial-thought-behavior-concerns" &&
+    fact.semantics.polarity === "denied" && /^no psychosis reported\b/i.test(value);
+  const canUseDirect = (fact.semantics.polarity === "affirmed" || explicitDenial) &&
+    (!["historical", "lifetime"].includes(fact.temporalStatus) || historyInClause) &&
+    (fact.sourceType !== "caregiver_report" || reporterInClause) && Boolean(candidate?.[0].test(value));
+  const reporter = fact.sourceType === "caregiver_report" ? "The caregiver reports" :
+    fact.sourceType === "participant_report" ? "The participant reports" :
+    fact.sourceType === "clinician_observation" ? "The clinician observed" : "The reviewed intake records";
+  const history = fact.temporalStatus === "historical" || fact.temporalStatus === "lifetime" ? "historically " : "";
+  const label = sourceEvidenceLabel(fact).toLowerCase();
+  const first = canUseDirect ? candidate![1] : `${reporter} ${history}${label} as ${value}.`;
+  const second = canUseDirect
+    ? first.replace(/^The participant /, "The reviewed intake indicates that the participant ")
+      .replace(/^The participant's /, "The reviewed intake indicates that the participant's ")
+      .replace(/^At intake, /, "The reviewed intake indicates that at intake, ")
+    : `Regarding ${history}${label}, ${reporter.toLowerCase()} ${value}.`;
+  return [first, second === first ? `In the reviewed intake, ${lower(first).replace(/[.!?]+$/, "")}.` : second];
+}
+
+export function verifiedNarrativeChoices(facts: AssessmentFact[]) {
+  return facts.flatMap((fact) => SYNTHESIS_SECTIONS.flatMap((section) => {
+    const options = verifiedNarrativeOptions(fact, section);
+    return options.length ? [{ sourceFactId: fact.id, section, options }] : [];
+  }));
+}
+
+function verifiedBlockText(block: SynthesisBlock, factsById: Map<string, AssessmentFact>) {
+  const choices: string[][] = [];
+  for (const id of block.sourceFactIds) {
+    const fact = factsById.get(id);
+    if (!fact) return null;
+    const options = verifiedNarrativeOptions(fact, block.section);
+    if (!options.length) return null;
+    choices.push(options);
+  }
+  const emitted = block.text.trim();
+  // A paragraph is a sequence of independently authorized clauses. Parsing
+  // exact options from left to right prevents one citation from licensing an
+  // unrelated clause, number, diagnosis, relationship, or service claim.
+  let remaining = emitted;
+  for (const options of choices) {
+    const match = options.find((option) => remaining.startsWith(option));
+    if (!match) return null;
+    remaining = remaining.slice(match.length);
+    if (remaining && !remaining.startsWith(" ")) return null;
+    remaining = remaining.trimStart();
+  }
+  return remaining === "" ? emitted : null;
+}
+
+export function repairVerifiedNarrative(candidate: unknown, facts: AssessmentFact[]) {
+  const parsed = parseAssessmentSynthesis(candidate);
+  if (!parsed || parsed.renderMode !== "verified-prose" || parsed.semanticReview !== undefined) return null;
+  const ledger = new Map(facts.map((fact) => [fact.id, fact]));
+  const blocks: SynthesisBlock[] = [];
+  for (const block of parsed.blocks) {
+    const exact = verifiedBlockText(block, ledger);
+    if (exact) { blocks.push(block); continue; }
+    const options = block.sourceFactIds.map((id) => {
+      const fact = ledger.get(id);
+      return fact ? verifiedNarrativeOptions(fact, block.section)[0] : undefined;
+    });
+    if (options.some((option) => !option)) return null;
+    blocks.push({ ...block, text: options.join(" ") });
+  }
+  return { blocks, renderMode: "verified-prose" as const };
+}
 function selectedFacts(facts: AssessmentFact[], fields: string[], limit: number) {
   return fields.map((field) => facts.find((fact) => fact.sourceField === field))
     .filter((fact): fact is AssessmentFact => Boolean(fact && !["denied", "unknown", "not_assessed", "not_applicable"].includes(fact.semantics.polarity)))
@@ -154,10 +292,27 @@ export function validateAssessmentSynthesis(candidate: unknown, facts: Assessmen
         block.sourceFactIds.join("|") !== synthesis.blocks[index].sourceFactIds.join("|"))) issues.push("source_ledger_mismatch");
     return { valid: issues.length === 0, issues };
   }
+  if (synthesis.renderMode === "verified-prose") {
+    if (synthesis.semanticReview !== undefined) issues.push("invalid_synthesis_shape");
+    const ledger = new Map(facts.map((fact) => [fact.id, fact]));
+    for (const [index, block] of synthesis.blocks.entries()) {
+      if (!verifiedBlockText(block, ledger)) issues.push(`unsupported_verified_prose_${index}`);
+    }
+    return { valid: issues.length === 0, issues };
+  }
+  return validateAssessmentProseBlocks(synthesis.blocks, facts, reviewIssues, issues);
+}
+
+// Legacy synthesis validation retained for the existing production contracts.
+// The pre-deployment LeanMaster path uses its pinned proposition semantics
+// instead; it does not run these competing sentence-wide heuristics.
+export function validateAssessmentProseBlocks(
+  blocks: SynthesisBlock[], facts: AssessmentFact[], reviewIssues: string[] | null = null, issues: string[] = []
+) {
   const semanticallyReviewed = reviewIssues !== null && reviewIssues.length === 0;
   const semanticIssue = (issue: string) => { if (!semanticallyReviewed) issues.push(issue); };
   const ledger = new Map(facts.map((fact) => [fact.id, fact]));
-  for (const block of synthesis.blocks) {
+  for (const block of blocks) {
     const sources = block.sourceFactIds.map((id) => ledger.get(id)).filter((fact): fact is AssessmentFact => Boolean(fact));
     if (sources.length !== block.sourceFactIds.length) { issues.push("missing_source"); continue; }
     const plan = block.section === "plan";
@@ -229,7 +384,7 @@ export function validateAssessmentSynthesis(candidate: unknown, facts: Assessmen
 // by the provider. They are still included in the final output privacy scan.
 export function authoritativeAssessmentBlocks(facts: AssessmentFact[]) {
   const safety = facts.filter((fact) => fact.domain === "safety").map((fact) => ({
-    text: `${sourceEvidenceText(fact)}.`, sourceFactIds: [fact.id]
+    text: safetyStatement(fact), sourceFactIds: [fact.id]
   }));
   const screeningFacts = facts.filter((fact) => fact.domain === "cognitive_screening");
   const counts = { correct: 0, incorrect: 0, unable: 0, unspecified: 0 };
@@ -244,18 +399,45 @@ export function authoritativeAssessmentBlocks(facts: AssessmentFact[]) {
   return { safety, screening };
 }
 
+function safetyStatement(fact: AssessmentFact) {
+  const value = fact.normalizedValue.trim().replace(/[.!?]+$/, "");
+  const lower = value[0]?.toLowerCase() + value.slice(1);
+  if (fact.sourceField === "functional-recent-falls" && /^one non-injury fall reported in the last 6 months$/i.test(value))
+    return "One non-injury fall was reported in the last six months.";
+  if (fact.sourceField === "medical-history-suicide-self-harm-history" && /^no$/i.test(value))
+    return "No history of suicide attempts or self-harm was reported.";
+  if (fact.sourceField === "safety-harm-risk" && /^no current risk of harm to self or others reported$/i.test(value))
+    return "No current risk of harm to self or others was reported.";
+  if (fact.sourceField === "safety-abuse-neglect-concerns" && /^none reported during sample intake$/i.test(value))
+    return "No abuse or neglect concerns were reported at intake.";
+  if (fact.sourceField === "medical-history-current-risk-details" && /^denies current suicidal or homicidal ideation in sample$/i.test(value))
+    return "At intake, the participant denied current suicidal or homicidal ideation.";
+  if (fact.sourceField === "conditions-medication-adherence-concerns" && /^occasional missed evening dose per caregiver$/i.test(value))
+    return "The caregiver reports an occasional missed evening dose.";
+  if (fact.sourceField === "safety-elopement-risk" && /^low; needs orientation to center exits and routines$/i.test(value))
+    return "Elopement risk is recorded as low, with orientation to center exits and routines needed.";
+  if (fact.sourceField === "safety-safety-precautions" && /^fall precautions, walker within reach, hydration reminders$/i.test(value))
+    return "Documented precautions include fall precautions, a walker within reach, and hydration reminders.";
+  if (fact.sourceField === "home-visit-safety-hazards" && /^scatter rugs; poor lighting$/i.test(value))
+    return "The home visit identified scatter rugs and poor lighting as safety hazards.";
+  if (fact.sourceField === "home-visit-other-safety-hazard" && /^recommend night lights\b/i.test(value))
+    return "The home visit recommends night lights in the hallway.";
+  return `The safety review records ${sourceEvidenceLabel(fact).toLowerCase()} as ${value}.`;
+}
+
 export function renderAssessmentSynthesis(synthesis: AssessmentSynthesis, facts: AssessmentFact[]) {
   const select = (section: SynthesisBlock["section"]) => synthesis.blocks.filter((block) => block.section === section).map((block) => block.text.trim());
   const authoritative = authoritativeAssessmentBlocks(facts);
   const paragraphs = select("assessment");
+  if (!paragraphs.length) paragraphs.push("No psychosocial narrative information was documented in the reviewed intake.");
   if (authoritative.screening) paragraphs[paragraphs.length - 1] += ` ${authoritative.screening.text}`;
   const sections = ["Psychosocial Assessment", paragraphs.join("\n\n")];
   for (const [heading, content] of [
     ["Strengths / Protective Factors", select("strengths").join(" ")],
     ["Identified Needs / Barriers", select("needs").join(" ")],
     ["Safety Considerations", authoritative.safety.map((block) => block.text).join(" ")],
-    ["Treatment / Service Plan", select("plan").map((text, index) => `${index + 1}. ${text}`).join("\n")]
-  ]) if (content) sections.push(heading, content);
+    ["Service / Treatment Plan", select("plan").map((text, index) => `${index + 1}. ${text}`).join("\n")]
+  ]) sections.push(heading, content || "No information documented in the reviewed intake for this section.");
   return sections.join("\n\n");
 }
 

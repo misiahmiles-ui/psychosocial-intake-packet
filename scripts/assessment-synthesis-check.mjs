@@ -88,7 +88,7 @@ test("output scan covers server-rendered facts too", () => assert.ok(synth.scanA
 test("headings do not create artificial PHI hits", () => assert.equal(synth.scanAssessmentSynthesis(draft, facts).length, 0));
 test("rendered output has required concise structure", () => {
   const text = synth.renderAssessmentSynthesis(draft, facts);
-  for (const heading of ["Psychosocial Assessment", "Strengths / Protective Factors", "Identified Needs / Barriers", "Safety Considerations", "Treatment / Service Plan"]) assert.ok(text.includes(heading));
+  for (const heading of ["Psychosocial Assessment", "Strengths / Protective Factors", "Identified Needs / Barriers", "Safety Considerations", "Service / Treatment Plan"]) assert.ok(text.includes(heading));
   assert.match(text, /1\. Consider[\s\S]*2\. Review/);
 });
 const selectionFacts = [

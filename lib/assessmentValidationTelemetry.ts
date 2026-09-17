@@ -62,12 +62,13 @@ export function recordAssessmentValidationFailure(issues: string[], claimCount: 
 export function recordAssessmentValidationSuccess(
   elapsedMs: number,
   owner: boolean,
-  format: "claims-v1" | "synthesis-v1" | "synthesis-v2" | "synthesis-v3" | "synthesis-v4"
+  format: "claims-v1" | "synthesis-v1" | "synthesis-v2" | "synthesis-v3" | "synthesis-v4" | "leanmaster-v1" | "deterministic-v1" | "verified-prose-v1"
 ) {
   console.info("assessment_validation_success", JSON.stringify({
     elapsedMs: Math.max(0, Math.round(elapsedMs)),
     format,
-    grounding: "passed", safety: "passed", screening: "passed", outputPhi: "passed",
-    owner, chargedCredits: owner ? 0 : 1
+    grounding: format === "deterministic-v1" ? "source_rendered" : format === "leanmaster-v1" ? "references_checked" : "passed",
+    safety: "passed", screening: "passed", outputPhi: "passed",
+    owner, assessmentUses: owner ? 0 : 1
   }));
 }

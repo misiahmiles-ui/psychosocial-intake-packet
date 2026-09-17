@@ -33,7 +33,7 @@ const checks = [
   ["provider disables response storage", () => assert.match(provider, /store: false/)],
   ["provider uses strict JSON Schema structured output", () => assert.match(provider, /strict: true[\s\S]*type: "json_schema"/)],
   ["provider keeps instructions separate from structured facts", () => {
-    assert.match(provider, /const instructions = selectionMode \? SOURCE_SELECTION_INSTRUCTIONS : synthesisMode \? SYNTHESIS_INSTRUCTIONS : ASSESSMENT_INSTRUCTIONS/);
+    assert.match(provider, /const instructions = verifiedMode \? VERIFIED_PROSE_INSTRUCTIONS : selectionMode \? SOURCE_SELECTION_INSTRUCTIONS/);
     assert.match(provider, /type: "input_text"[\s\S]*JSON\.stringify\(\{ sourceFacts:/);
     assert.match(provider, /const providerFacts = compactFactsForProvider\(outboundFacts\)/);
     assert.doesNotMatch(provider, /ASSESSMENT_INSTRUCTIONS\s*\+/);
@@ -45,12 +45,22 @@ const checks = [
     assert.ok(scanIndex > 0 && scanIndex < fetchIndex);
   }],
   ["provider bounds output for the synchronous production handler", () => assert.match(provider, /max_output_tokens: selectionMode \? 1000 : 3000/)],
-  ["v4 provider selects only source IDs and both sides verify exact ledger rendering", () => {
-    assert.match(provider, /sourceSelectionSchema[\s\S]*required: \["paragraphs"\]/);
-    assert.match(provider, /buildSourceLedgerSynthesis\(selection, facts\)/);
-    assert.match(endpoint, /"synthesis-v4"/);
-    assert.match(workflow, /"X-Assessment-Format": "synthesis-v4"/);
+  ["active provider returns validated source-bound prose with one repair pass", () => {
+    assert.match(provider, /VERIFIED_PROSE_INSTRUCTIONS/);
+    assert.match(provider, /verifiedNarrativeChoices\(outboundFacts\)/);
+    assert.match(provider, /if \(verifiedMode\)/);
+    assert.match(endpoint, /repairVerifiedNarrative\(drafted, assessmentRequest\.facts\)/);
+    assert.match(endpoint, /validateAssessmentSynthesis\(candidate, assessmentRequest\.facts\)/);
     assert.match(workflow, /validateAssessmentSynthesis\(result\.synthesis, outboundFacts\)/);
+  }],
+  ["built-in assessment precedes optional AI and retains the review gate", () => {
+    assert.match(endpoint, /buildDeterministicAssessment\(assessmentRequest.facts\)/);
+    assert.match(workflow, /buildDeterministicAssessment\(outboundFacts\)/);
+    assert.match(endpoint, /assessmentRequest\.aiEnhancement === true/);
+    assert.match(endpoint, /completed = true/);
+    assert.match(workflow, /disabled=\{stale \|\| !workingText.trim\(\)\}/);
+    assert.match(workflow, /onChange=\{\(event\) => setWorkingText\(event.target.value\)\}/);
+    assert.doesNotMatch(workflow, /reviewedText|canAcceptAssessmentDraft|clinicianReviewConfirmed|clinicalReview/);
   }],
   ["provider uses low reasoning effort for timely structured output", () => assert.match(provider, /reasoning: \{ effort: "low" \}/)],
   ["provider hydrates compact output before mandatory claim validation", () => {
@@ -79,12 +89,12 @@ const checks = [
     assert.match(validationTelemetry, /categories: classifyAssessmentValidationIssues\(issues\)/);
   }],
   ["initial entitlement defaults are centralized", () => {
-    assert.match(policy, /DEFAULT_ASSESSMENT_INCLUDED_QUANTITY = 30/);
+    assert.match(policy, /DEFAULT_ASSESSMENT_INCLUDED_QUANTITY = 25/);
     assert.match(policy, /DEFAULT_ASSESSMENT_ENTITLEMENT_WINDOW_DAYS = 30/);
-    assert.match(policy, /DEFAULT_ASSESSMENT_RECURRING_INCLUDED_QUANTITY = 30/);
-    assert.match(usage, /PSYCHOSOCIAL_ASSESSMENT_INCLUDED_QUANTITY/);
+    assert.match(policy, /DEFAULT_ASSESSMENT_RECURRING_INCLUDED_QUANTITY = 25/);
+    assert.match(usage, /includedQuantity: DEFAULT_ASSESSMENT_INCLUDED_QUANTITY/);
     assert.match(usage, /PSYCHOSOCIAL_ASSESSMENT_ENTITLEMENT_WINDOW_DAYS/);
-    assert.match(usage, /PSYCHOSOCIAL_ASSESSMENT_RECURRING_INCLUDED_QUANTITY/);
+    assert.match(usage, /recurringIncludedQuantity: DEFAULT_ASSESSMENT_RECURRING_INCLUDED_QUANTITY/);
   }],
   ["entitlement is purchase-scoped", () => {
     assert.match(migration, /purchase_reference text not null unique/);
@@ -100,18 +110,16 @@ const checks = [
     assert.doesNotMatch(entitlementSources, /America\/New_York|quota_month|MONTHLY_LIMIT|currentAssessmentMonth|monthly_quota/);
   }],
   ["purchase completion grants the included entitlement", () => assert.match(webhook, /handleCompletedCheckout[\s\S]*createInitialAssessmentEntitlementGrant[\s\S]*grantAssessmentGenerationEntitlement/)],
-  ["purchase completion creates the deferred assessment subscription", () => {
-    assert.match(webhook, /ensureAssessmentGenerationSubscription/);
-    assert.match(stripeServer, /trial_end: trialEnd/);
-    assert.match(stripeServer, /psychosocial-assessment-generations:/);
-    assert.match(stripeServer, /STRIPE_PSYCHOSOCIAL_ASSESSMENT_GENERATIONS_MONTHLY_PRICE_ID/);
+  ["purchase uses only the existing hosted-access subscription", () => {
+    assert.doesNotMatch(webhook, /ensureAssessmentGenerationSubscription/);
+    assert.doesNotMatch(stripeServer, /STRIPE_PSYCHOSOCIAL_ASSESSMENT_GENERATIONS_MONTHLY_PRICE_ID/);
   }],
-  ["paid assessment billing cycles grant recurring entitlement", () => {
+  ["paid hosted-access billing cycles grant recurring entitlement", () => {
     assert.match(webhook, /event\.type === "invoice\.paid"/);
-    assert.match(webhook, /handlePaidAssessmentGenerationInvoice[\s\S]*createRecurringAssessmentEntitlementGrant/);
+    assert.match(webhook, /handlePaidPsychosocialInvoice[\s\S]*createRecurringAssessmentEntitlementGrant/);
     assert.match(webhook, /billing_reason === "subscription_cycle"/);
     assert.match(webhook, /amount_paid > 0/);
-    assert.match(webhook, /psychosocial_assessment_generations/);
+    assert.match(webhook, /subscription\.metadata\.product_code !== "psychosocial"/);
     assert.match(webhook, /invoiceBillingCycle\(invoice, expectedMonthlyPriceId\)/);
     assert.match(migration, /recurring_billing_cycle/);
     assert.match(migration, /stripe_invoice_id text unique/);
@@ -146,10 +154,10 @@ const checks = [
     assert.match(migration, /organization_id is not distinct from p_organization_id/);
   }],
   ["quota RPCs are service-role only", () => assert.match(migration, /grant execute[\s\S]*service_role/)],
-  ["purchase UI states the included generation entitlement", () => {
+  ["purchase UI states the included assessment entitlement", () => {
     assert.match(marketing, /INITIAL_ASSESSMENT_ENTITLEMENT_LABEL/);
     assert.match(marketing, /RECURRING_ASSESSMENT_ENTITLEMENT_LABEL/);
-    assert.match(policy, /AI-Assisted Psychosocial Assessment Generations Included/);
+    assert.match(policy, /Psychosocial Assessment Included/);
   }],
   ["workflow uses volatile React state only", () => assert.doesNotMatch(workflow, /localStorage|sessionStorage|indexedDB|supabase.*from\(/i)],
   ["workflow never sends generated or edited assessment text", () => {
@@ -158,7 +166,7 @@ const checks = [
   }],
   ["workflow maps host gateway failures to a PHI-safe timeout category", () => {
     assert.match(workflow, /readSafeGenerationError\(response\.status, result\)/);
-    assert.match(workflow, /status === 504[\s\S]*No generation was charged/);
+    assert.match(workflow, /status === 504[\s\S]*No assessment use was consumed/);
   }],
   ["clinician edits are explicitly distinguished", () => assert.match(workflow, /Contains clinician-authored edits/)],
   ["stale assessments are detected", () => assert.match(workflow, /generatedRevision !== currentRevisionToken/)],

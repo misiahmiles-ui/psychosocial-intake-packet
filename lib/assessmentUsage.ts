@@ -28,6 +28,7 @@ type AssessmentEntitlementScope =
 export type AssessmentEntitlementActivation = AssessmentEntitlementScope & {
   purchaseReference: string;
   startsAt: string;
+  expiresAt?: string;
 };
 
 export type AssessmentRecurringEntitlement = AssessmentEntitlementScope & {
@@ -95,24 +96,14 @@ function integerEnvironmentValue(
 
 export function getAssessmentGenerationConfig(): AssessmentGenerationConfig {
   return {
-    includedQuantity: integerEnvironmentValue(
-      "PSYCHOSOCIAL_ASSESSMENT_INCLUDED_QUANTITY",
-      DEFAULT_ASSESSMENT_INCLUDED_QUANTITY,
-      1,
-      1000
-    ),
+    includedQuantity: DEFAULT_ASSESSMENT_INCLUDED_QUANTITY,
     entitlementWindowDays: integerEnvironmentValue(
       "PSYCHOSOCIAL_ASSESSMENT_ENTITLEMENT_WINDOW_DAYS",
       DEFAULT_ASSESSMENT_ENTITLEMENT_WINDOW_DAYS,
       1,
       365
     ),
-    recurringIncludedQuantity: integerEnvironmentValue(
-      "PSYCHOSOCIAL_ASSESSMENT_RECURRING_INCLUDED_QUANTITY",
-      DEFAULT_ASSESSMENT_RECURRING_INCLUDED_QUANTITY,
-      1,
-      1000
-    ),
+    recurringIncludedQuantity: DEFAULT_ASSESSMENT_RECURRING_INCLUDED_QUANTITY,
     rapidLimit: integerEnvironmentValue(
       "PSYCHOSOCIAL_ASSESSMENT_RAPID_LIMIT",
       5,
@@ -147,7 +138,7 @@ export function createInitialAssessmentEntitlementGrant(
   return {
     ...activation,
     entitlementKind: "initial_purchase",
-    expiresAt: addExactDays(activation.startsAt, config.entitlementWindowDays),
+    expiresAt: activation.expiresAt ?? addExactDays(activation.startsAt, config.entitlementWindowDays),
     includedQuantity: config.includedQuantity
   };
 }
@@ -203,10 +194,6 @@ export async function reserveAssessmentGeneration(
   activation: AssessmentEntitlementActivation | null
 ): Promise<ReservationResult> {
   if (!activation) return unavailableReservation();
-
-  await grantAssessmentGenerationEntitlement(
-    createInitialAssessmentEntitlementGrant(activation)
-  );
 
   const config = getAssessmentGenerationConfig();
   const admin = createSupabaseAdminClient();

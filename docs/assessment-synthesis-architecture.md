@@ -1,5 +1,7 @@
 # NJ assessment synthesis
 
+Historical design note. The active offline contract is documented in `assessment-verified-narrative.md`; the optional AI path now returns constrained, source-bound clinician-facing prose.
+
 Reference: LeanMaster production revision `ef76ca0735ed841e82fa98eed48420724709468b`, confirmed in GitHub's Production deployment history. Read-only reference files: `sourceFactLedger.ts`, `assessmentPlanTraceability.ts`, `sourceGrounding.ts`, and the active `generate-note` route.
 
 ## Contract

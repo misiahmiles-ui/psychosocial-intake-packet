@@ -99,47 +99,6 @@ export function assertPsychosocialSubscriptionAuthority({
   }
 }
 
-export function assertAssessmentGenerationSubscriptionAuthority({
-  customerId,
-  expectedMonthlyPriceId,
-  items,
-  metadata,
-  userId
-}: {
-  customerId: string | null;
-  expectedMonthlyPriceId: string;
-  items: Array<{ priceId: string | null; quantity: number | null }>;
-  metadata: PurchaseMetadata;
-  userId: string;
-}) {
-  if (
-    metadata.supabase_user_id !== userId ||
-    metadata.product_code !== "psychosocial_assessment_generations" ||
-    !["organization", "user"].includes(metadata.generation_scope ?? "") ||
-    !metadata.parent_checkout_session_id
-  ) {
-    throw new PsychosocialCheckoutAuthorityError(
-      "Stripe assessment-generation subscription metadata is not authorized."
-    );
-  }
-
-  if (!customerId) {
-    throw new PsychosocialCheckoutAuthorityError(
-      "Stripe assessment-generation subscription is missing its customer binding."
-    );
-  }
-
-  if (
-    items.length !== 1 ||
-    items[0]?.priceId !== expectedMonthlyPriceId ||
-    items[0]?.quantity !== 1
-  ) {
-    throw new PsychosocialCheckoutAuthorityError(
-      "Stripe assessment-generation subscription does not contain the approved monthly price."
-    );
-  }
-}
-
 function assertPsychosocialMetadata(
   metadata: PurchaseMetadata,
   userId: string,

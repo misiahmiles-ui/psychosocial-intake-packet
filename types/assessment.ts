@@ -208,6 +208,7 @@ export type ReviewedAmbiguousFinding = {
 export type AssessmentRequest = {
   version: 1;
   jurisdiction: "NJ" | "MD";
+  aiEnhancement?: boolean;
   facts: AssessmentFact[];
   reviewedAmbiguousFindings: ReviewedAmbiguousFinding[];
 };
@@ -239,7 +240,7 @@ export type AssessmentValidationSummary = {
   preflightPhiScan: "passed";
   finalOutboundScan: "passed";
   outputPhiScan: "passed";
-  sourceGrounding: "passed";
+  sourceGrounding: "passed" | "references_checked" | "source_rendered" | "verified_prose";
   safetyPreserved: "passed";
   unsupportedDiagnosisDetected: false;
   criticalUnresolvedConflicts: 0;
@@ -247,6 +248,8 @@ export type AssessmentValidationSummary = {
 };
 
 export type ValidatedAssessmentResponse = {
+  leanmasterNote?: import("@/lib/assessmentSynthesis").AssessmentSynthesis;
+  generationMethod?: "ai" | "deterministic";
   synthesis?: import("@/lib/assessmentSynthesis").AssessmentSynthesis;
   claims: AssessmentClaim[];
   assessmentText: string;
