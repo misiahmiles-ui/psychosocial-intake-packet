@@ -58,7 +58,7 @@ Only a successful workflow returning a usable assessment consumes one assessment
 Do not deploy this feature until the owner has reviewed the branch and completed these steps:
 
 1. Open the existing Supabase project used by this Psychosocial Intake application.
-2. Confirm the shared-suite schema migration is present. Apply `supabase/migrations/20260915_psychosocial_assessment_quota.sql`, then `supabase/migrations/20260917_included_psychosocial_assessments.sql` in order during the approved deployment. The latter caps any existing 30-use pools at 25.
+2. Confirm the shared-suite schema migration is present. Apply `supabase/migrations/20260915_psychosocial_assessment_quota.sql`, then `supabase/migrations/20260917_included_psychosocial_assessments.sql` in order when approved. The latter aligns the single verified pre-customer 30-use entitlement to 25, preserves its completed and released events, and enforces 25 for newly inserted entitlement rows. Each paid renewal creates a new 25-use billing-cycle row.
 3. In **Table Editor**, verify `psychosocial_assessment_generation_entitlements` contains only purchase, Stripe subscription/invoice, account-scope, included quantity, and billing-window metadata; `psychosocial_assessment_generation_events` contains only reservation/completion metadata. Confirm row-level security is enabled on both. Neither table may contain participant clinical content or PHI.
 4. In the Netlify site for this application, open **Site configuration → Environment variables**.
 5. Add `OPENAI_API_KEY` as a server-only value. It may be a key from the same approved OpenAI account/project/billing source used by LeanMaster, but it must be configured independently for this Netlify site. Never use a `NEXT_PUBLIC_` prefix.

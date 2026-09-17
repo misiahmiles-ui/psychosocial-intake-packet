@@ -145,7 +145,17 @@ test("25-use billing policy and existing prices remain configured", () => {
   assert.match(stripe, /STANDARD_ACCESS_MONTHLY_PRICE_CENTS \?\? 1900/);
   assert.doesNotMatch(webhook, /ensureAssessmentGenerationSubscription/);
   assert.match(webhook, /getStandardAccessPriceIds\(\)\.monthlyPriceId/);
-  assert.match(readFileSync(resolve(root, "supabase/migrations/20260917_included_psychosocial_assessments.sql"), "utf8"), /set included_quantity = 25/);
+  const migration = readFileSync(resolve(root, "supabase/migrations/20260917_included_psychosocial_assessments.sql"), "utf8");
+  assert.match(migration, /v_entitlement_id uuid := '[0-9a-f-]+'/i);
+  assert.match(migration, /entitlement_kind = 'initial_purchase'[\s\S]*included_quantity in \(25, 30\)/i);
+  assert.match(migration, /v_completed <> 1 or v_reserved <> 0 or v_released <> 1/i);
+  assert.match(migration, /update public\.psychosocial_assessment_generation_entitlements\s+set included_quantity = 25\s+where id = v_entitlement_id and included_quantity = 30/i);
+  assert.doesNotMatch(migration, /delete\s+from\s+public\.psychosocial_assessment_generation_events/i);
+  assert.match(migration, /after insert on public\.psychosocial_assessment_generation_entitlements[\s\S]*for each row/i);
+  assert.match(migration, /if new\.included_quantity <> 25 then/i);
+  assert.match(migration, /on conflict \(purchase_reference\) do nothing/i);
+  assert.match(migration, /entitlement\.included_quantity = 30 and p_included_quantity = 25/i);
+  assert.match(migration, /entitlement\.starts_at = p_starts_at[\s\S]*entitlement\.expires_at = p_expires_at/i);
 });
 test("accepted assessment starts a new print and final-PDF page", () => {
   const css = readFileSync(resolve(root, "app/globals.css"), "utf8");
